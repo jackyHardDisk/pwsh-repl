@@ -1,0 +1,245 @@
+# Out-String
+
+- Module:
+    - [Microsoft.PowerShell.Utility Module](./?view=powershell-7.5)
+
+Outputs input objects as a string.
+
+## Syntax
+
+### NoNewLineFormatting (Default)
+
+```Syntax
+Out-String
+    [-Width <Int32>]
+    [-NoNewline]
+    [-InputObject <PSObject>]
+    [<CommonParameters>]
+```
+
+### StreamFormatting
+
+```Syntax
+Out-String
+    [-Stream]
+    [-Width <Int32>]
+    [-InputObject <PSObject>]
+    [<CommonParameters>]
+```
+
+## Description
+
+The `Out-String` cmdlet converts input objects into strings. By default, `Out-String` accumulates the strings and returns them as a single string, but you can use the **Stream** parameter to direct `Out-String` to return one line at a time or create an array of strings. This cmdlet lets you search and manipulate string output as you would in traditional shells when object manipulation is less convenient.
+
+PowerShell also adds the `oss` function that calls `Out-String -Stream` as a shorthand way to use `Out-String` in a pipeline.
+
+## Examples
+
+### Example 1: Get the current culture and convert the data to strings
+
+This example gets the regional settings for the current user and converts the object data to strings.
+
+```powershell
+$C = Get-Culture | Select-Object -Property *
+Out-String -InputObject $C -Width 100
+```
+
+```Output
+Parent                         : en
+LCID                           : 1033
+KeyboardLayoutId               : 1033
+Name                           : en-US
+IetfLanguageTag                : en-US
+DisplayName                    : English (United States)
+NativeName                     : English (United States)
+EnglishName                    : English (United States)
+TwoLetterISOLanguageName       : en
+ThreeLetterISOLanguageName     : eng
+ThreeLetterWindowsLanguageName : ENU
+CompareInfo                    : CompareInfo - en-US
+TextInfo                       : TextInfo - en-US
+IsNeutralCulture               : False
+CultureTypes                   : SpecificCultures, InstalledWin32Cultures, FrameworkCultures
+NumberFormat                   : System.Globalization.NumberFormatInfo
+DateTimeFormat                 : System.Globalization.DateTimeFormatInfo
+Calendar                       : System.Globalization.GregorianCalendar
+OptionalCalendars              : {System.Globalization.GregorianCalendar,
+                                 System.Globalization.GregorianCalendar}
+UseUserOverride                : True
+IsReadOnly                     : False
+```
+
+The `$C` variable stores a **Selected.System.Globalization.CultureInfo** object. The object is the result of `Get-Culture` sending output down the pipeline to `Select-Object`. The **Property** parameter uses an asterisk (`*`) wildcard to specify all properties are contained in the object.
+
+`Out-String` uses the **InputObject** parameter to specify the **CultureInfo** object stored in the `$C` variable. The objects in `$C` are converted to a string.
+
+Note
+
+To view the `Out-String` array, store the output to a variable and use an array index to view the elements. For more information about the array index, see [about_Arrays](../microsoft.powershell.core/about/about_arrays?view=powershell-7.5).
+
+`$str = Out-String -InputObject $C -Width 100`
+
+### Example 2: Working with objects
+
+This example demonstrates the difference between working with objects and working with strings. The command displays an alias that includes the text **gcm**, the alias for `Get-Command`.
+
+```powershell
+Get-Alias | Out-String -Stream | Select-String -Pattern "gcm"
+```
+
+```Output
+Alias           gcm -> Get-Command
+```
+
+`Get-Alias` gets the **System.Management.Automation.AliasInfo** objects, one for each alias, and sends the objects down the pipeline. `Out-String` uses the **Stream** parameter to convert each object to a string rather than concatenating all the objects into a single string. The **System.String** objects are sent down the pipeline and `Select-String` uses the **Pattern** parameter to find matches for the text **gcm**.
+
+Note
+
+If you omit the **Stream** parameter, the command displays all the aliases because `Select-String` finds the text **gcm** in the single string that `Out-String` returns.
+
+### Example 3: Use the Width parameter to prevent truncation
+
+While most output from `Out-String` is wrapped to the next line, there are scenarios where the output is truncated by the formatting system before being passed to `Out-String`. You can avoid truncation using the **Width** parameter.
+
+```powershell
+PS> @{TestKey = ('x' * 200)} | Out-String
+Name                           Value
+----                           -----
+TestKey                        xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx...
+
+PS> @{TestKey = ('x' * 200)} | Out-String -Width 250
+
+Name                           Value
+----                           -----
+TestKey                        xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+## Parameters
+
+### -InputObject
+
+Specifies the objects to be written to a string. Enter a variable that contains the objects, or type a command or expression that gets the objects.
+
+#### Parameter properties
+
+| Type: | [PSObject](/en-us/dotnet/api/system.management.automation.psobject) |
+| --- | --- |
+| Default value: | None |
+| Supports wildcards: | False |
+| DontShow: | False |
+
+#### Parameter sets
+
+ (All)
+
+| Position: | Named |
+| --- | --- |
+| Mandatory: | False |
+| Value from pipeline: | True |
+| Value from pipeline by property name: | False |
+| Value from remaining arguments: | False |
+
+### -NoNewline
+
+Removes all newlines from output generated by the PowerShell formatter. Newlines that are part of the string objects are preserved.
+
+This parameter was introduced in PowerShell 6.0.
+
+#### Parameter properties
+
+| Type: | [SwitchParameter](/en-us/dotnet/api/system.management.automation.switchparameter) |
+| --- | --- |
+| Default value: | False |
+| Supports wildcards: | False |
+| DontShow: | False |
+
+#### Parameter sets
+
+ NoNewLineFormatting
+
+| Position: | Named |
+| --- | --- |
+| Mandatory: | False |
+| Value from pipeline: | False |
+| Value from pipeline by property name: | False |
+| Value from remaining arguments: | False |
+
+### -Stream
+
+By default, `Out-String` outputs a single string formatted as you would see it in the console including any blank headers or trailing newlines. The **Stream** parameter enables `Out-String` to output each line one by one. The only exception to this are multiline strings. In that case, `Out-String` will still output the string as a single, multiline string.
+
+#### Parameter properties
+
+| Type: | [SwitchParameter](/en-us/dotnet/api/system.management.automation.switchparameter) |
+| --- | --- |
+| Default value: | False |
+| Supports wildcards: | False |
+| DontShow: | False |
+
+#### Parameter sets
+
+ StreamFormatting
+
+| Position: | Named |
+| --- | --- |
+| Mandatory: | False |
+| Value from pipeline: | False |
+| Value from pipeline by property name: | False |
+| Value from remaining arguments: | False |
+
+### -Width
+
+Specifies the number of characters in each line of output. Any additional characters are wrapped to the next line or truncated depending on the formatter cmdlet used. The **Width** parameter applies only to objects that are being formatted. If you omit this parameter, the width is determined by the characteristics of the host program. In terminal (console) windows, the current window width is used as the default value. PowerShell console windows default to a width of 80 characters on installation.
+
+#### Parameter properties
+
+| Type: | [Int32](/en-us/dotnet/api/system.int32) |
+| --- | --- |
+| Default value: | None |
+| Supports wildcards: | False |
+| DontShow: | False |
+
+#### Parameter sets
+
+ (All)
+
+| Position: | Named |
+| --- | --- |
+| Mandatory: | False |
+| Value from pipeline: | False |
+| Value from pipeline by property name: | False |
+| Value from remaining arguments: | False |
+
+### CommonParameters
+
+This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable, -InformationAction, -InformationVariable, -OutBuffer, -OutVariable, -PipelineVariable, -ProgressAction, -Verbose, -WarningAction, and -WarningVariable. For more information, see [about_CommonParameters](https://go.microsoft.com/fwlink/?LinkID=113216).
+
+## Inputs
+
+### [PSObject](/en-us/dotnet/api/system.management.automation.psobject)
+
+You can pipe any object to this cmdlet.
+
+## Outputs
+
+### [String](/en-us/dotnet/api/system.string)
+
+This cmdlet returns the string that it creates from the input object.
+
+## Notes
+
+The cmdlets that contain the `Out` verb don't format objects. The `Out` cmdlets send objects to the formatter for the specified display destination.
+
+PowerShell 7.2 added the ability to control how ANSI escape sequences are rendered. ANSI-decorated output that is passed to `Out-String` can be altered based on the setting of the `$PSStyle.OutputRendering` property. For more information, see [about_ANSI_Terminals](/en-us/powershell/module/microsoft.powershell.core/about/about_ansi_terminals).
+
+## Related Links
+
+- [about_Formatting](../microsoft.powershell.core/about/about_format.ps1xml?view=powershell-7.5)
+- [Out-Default](../microsoft.powershell.core/out-default?view=powershell-7.5)
+- [Out-File](out-file?view=powershell-7.5)
+- [Out-Host](../microsoft.powershell.core/out-host?view=powershell-7.5)
+- [Out-Null](../microsoft.powershell.core/out-null?view=powershell-7.5)
+- [Out-GridView](out-gridview?view=powershell-7.5)
+- [Out-Printer](out-printer?view=powershell-7.5)
