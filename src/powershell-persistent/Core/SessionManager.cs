@@ -34,6 +34,42 @@ public class SessionManager : IDisposable
         var pwsh = PowerShell.Create();
         pwsh.Runspace = runspace;
 
+        // Pre-load AgentBricks module
+        try
+        {
+            var modulePath = Path.Combine(AppContext.BaseDirectory, "Modules", "AgentBricks");
+            if (Directory.Exists(modulePath))
+            {
+                pwsh.AddScript($"Import-Module '{modulePath}' -DisableNameChecking -ErrorAction SilentlyContinue");
+                pwsh.Invoke();
+                pwsh.Commands.Clear();
+                pwsh.Streams.ClearStreams();
+
+                // Validate module loaded successfully
+                pwsh.AddScript("$global:BrickStore.Patterns.Count");
+                var testResult = pwsh.Invoke();
+                pwsh.Commands.Clear();
+                pwsh.Streams.ClearStreams();
+
+                if (testResult.Count == 0 || testResult[0] == null || testResult[0].ToString() == "0")
+                {
+                    Console.Error.WriteLine($"WARNING: AgentBricks module loaded but appears non-functional (no patterns loaded)");
+                }
+                else
+                {
+                    Console.Error.WriteLine($"SessionManager: Loaded AgentBricks module for session '{sessionId}' ({testResult[0]} patterns)");
+                }
+            }
+            else
+            {
+                Console.Error.WriteLine($"SessionManager: AgentBricks module not found at '{modulePath}'");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"SessionManager: Failed to load AgentBricks module: {ex.Message}");
+        }
+
         return new PowerShellSession(pwsh, runspace);
     }
 

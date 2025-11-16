@@ -25,4 +25,13 @@
           SkipUnchangedFiles="true" />
   </Target>
 
+  <Target Name="CopyAgentBricksModule" AfterTargets="Build">
+    <ItemGroup>
+      <AgentBricksFiles Include="src\powershell-persistent\Modules\AgentBricks\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(AgentBricksFiles)"
+          DestinationFolder="$(OutDir)Modules\AgentBricks\%(RecursiveDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

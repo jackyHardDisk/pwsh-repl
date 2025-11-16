@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Linq;
 using System.Management.Automation;
 using System.Text;
 using ModelContextProtocol.Server;
@@ -32,6 +33,23 @@ public class PwshTool
         {
             session.PowerShell.AddScript(script);
             var results = session.PowerShell.Invoke();
+
+            // Check if results contain PowerShell formatting objects
+            bool hasFormattingObjects = results.Any(r =>
+                r?.BaseObject?.GetType().FullName?.StartsWith(
+                    "Microsoft.PowerShell.Commands.Internal.Format",
+                    StringComparison.Ordinal) == true);
+
+            // If formatting objects detected, re-invoke with Out-String to get proper output
+            if (hasFormattingObjects)
+            {
+                session.PowerShell.Commands.Clear();
+                session.PowerShell.Streams.ClearStreams();
+                session.PowerShell.AddScript(script);
+                session.PowerShell.AddCommand("Out-String");
+                session.PowerShell.AddParameter("Stream", false); // Return single string, not per-line
+                results = session.PowerShell.Invoke();
+            }
 
             return FormatResults(results, session.PowerShell);
         }
