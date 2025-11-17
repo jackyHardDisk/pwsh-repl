@@ -97,7 +97,9 @@ public void CheckIn(PowerShellSession session)
 3. **Warning** (3) - Warning stream (WarningRecord)
 4. **Verbose** (4) - Verbose stream (VerboseRecord)
 5. **Debug** (5) - Debug stream (DebugRecord)
-6. **Information** (6) - Information stream (InformationRecord)
+6. **Information** (6) - Information stream (InformationRecord) - **includes Write-Host**
+
+**CRITICAL:** Write-Host writes to the **Information stream (6)**, NOT a separate "host" stream. This stream must be captured for Write-Host output to be visible.
 
 **Accessing Streams:**
 ```csharp
@@ -121,6 +123,18 @@ if (errors != null && errors.Count > 0)
     }
 }
 ```
+
+**Current Implementation Status (2025-11-16):**
+
+PwshTool.cs (lines 70-107) currently captures:
+- ✅ Output stream (1) - via `results` collection
+- ✅ Error stream (2) - via `pwsh.Streams.Error`
+- ✅ Warning stream (3) - via `pwsh.Streams.Warning`
+- ❌ Verbose stream (4) - NOT captured
+- ❌ Debug stream (5) - NOT captured
+- ❌ Information stream (6) - NOT captured (**causes Write-Host to be invisible**)
+
+**Action Required:** Add Verbose, Debug, and Information stream capture to FormatResults method.
 
 ### 3.2 Error Handling Strategy
 
@@ -160,7 +174,22 @@ catch (RuntimeException ex)
 }
 ```
 
-### 3.3 Output Formatting
+### 3.3 Preference Variables and Stream Visibility
+
+**Default Preferences:**
+```powershell
+$VerbosePreference = "SilentlyContinue"      # Default - Verbose hidden
+$DebugPreference = "SilentlyContinue"        # Default - Debug hidden
+$InformationPreference = "SilentlyContinue"  # Default - Information hidden (PS 5.0+)
+$WarningPreference = "Continue"              # Default - Warnings shown
+$ErrorActionPreference = "Continue"          # Default - Errors shown
+```
+
+**CRITICAL:** Even when preference is SilentlyContinue, messages ARE still written to `pwsh.Streams.*` collections. Preference variables only control console display, NOT stream capture. C# code can always access all streams regardless of preferences.
+
+**Reference**: [Configure runbook output and message streams](https://learn.microsoft.com/en-us/azure/automation/automation-runbook-output-and-messages#working-with-message-streams)
+
+### 3.4 Output Formatting
 
 **Challenge:** Convert PSObject to string for MCP response
 
@@ -216,6 +245,87 @@ public async Task<string> ExecutePowerShell(
     }
 }
 ```
+
+### 4.2 Complete Stream Capture Pattern
+
+**Enhanced FormatResults for all six streams:**
+
+```csharp
+private static string FormatResults(ICollection<PSObject> results, PowerShell pwsh)
+{
+    var output = new StringBuilder();
+
+    // 1. Output stream
+    if (results.Count > 0)
+    {
+        foreach (var result in results)
+        {
+            if (result?.BaseObject is string str)
+                output.AppendLine(str);
+            else
+                output.AppendLine(result?.ToString() ?? "(null)");
+        }
+    }
+
+    // 2. Error stream
+    if (pwsh.HadErrors)
+    {
+        output.AppendLine("\nErrors:");
+        foreach (var error in pwsh.Streams.Error)
+        {
+            output.AppendLine($"  {error}");
+        }
+    }
+
+    // 3. Warning stream
+    if (pwsh.Streams.Warning.Count > 0)
+    {
+        output.AppendLine("\nWarnings:");
+        foreach (var warning in pwsh.Streams.Warning)
+        {
+            output.AppendLine($"  {warning}");
+        }
+    }
+
+    // 4. Verbose stream
+    if (pwsh.Streams.Verbose.Count > 0)
+    {
+        output.AppendLine("\nVerbose:");
+        foreach (var verbose in pwsh.Streams.Verbose)
+        {
+            output.AppendLine($"  {verbose}");
+        }
+    }
+
+    // 5. Debug stream
+    if (pwsh.Streams.Debug.Count > 0)
+    {
+        output.AppendLine("\nDebug:");
+        foreach (var debug in pwsh.Streams.Debug)
+        {
+            output.AppendLine($"  {debug}");
+        }
+    }
+
+    // 6. Information stream (includes Write-Host)
+    if (pwsh.Streams.Information.Count > 0)
+    {
+        output.AppendLine("\nInformation:");
+        foreach (var info in pwsh.Streams.Information)
+        {
+            output.AppendLine($"  {info}");
+        }
+    }
+
+    return output.ToString().TrimEnd();
+}
+```
+
+**Impact:**
+- Minimal token cost (~200-300 tokens)
+- Fixes Write-Host visibility (Information stream)
+- Complete stream visibility for debugging
+- All streams already captured by PowerShell runtime
 
 ## 5. Concurrency Patterns
 
@@ -384,9 +494,95 @@ ps.AddCommand("Out-String");
 ps.AddParameter("Width", 250);  // Default can truncate long output
 ```
 
-## 11. Future Enhancements
+## 11. PowerShell Modules
 
-### 11.1 Named Sessions
+### 11.1 AgentBricks Module (Implemented)
+**Location:** `src/powershell-persistent/Modules/AgentBricks/`
+
+**Purpose:** Token-efficient analysis and transformation functions for build logs, error messages, and structured data.
+
+**Features:**
+- 20 PowerShell functions (Transform, Extract, Analyze, Present, Meta)
+- 40+ pre-configured patterns for build tools (MSBuild, GCC, CMake, ESLint, Pytest)
+- Auto-loads on session creation
+- Comment-based help (Get-Help)
+- Zero upfront token cost (discovered via Get-Help)
+
+**Pattern:**
+```powershell
+# Run build with dev_run
+dev_run("dotnet build", "build")
+
+# Analyze with AgentBricks
+pwsh('$env:build_stderr | Find-Errors | Measure-Frequency | Format-Count')
+```
+
+### 11.2 SessionLog Module (Implemented)
+**Location:** `.gary/scripts/SessionLog.psm1`
+
+**Purpose:** JSONL-based session logging for tracking completed tasks, todos, notes, and bugs.
+
+**Functions:**
+- `Add-SessionLog` - Create session entry
+- `Read-SessionLog` - Query entries (Last, Date, Show-Session)
+- `Get-SessionDate` - Calculate session date (4 AM boundary)
+
+**Pattern:**
+```powershell
+Add-SessionLog -Completed @("Task 1") -Todos @("Task 2") -Notes @("Note") -Bugs @()
+Read-SessionLog -Last 1
+```
+
+**Loading:** Via PWSH_MCP_MODULES environment variable in .mcp.json
+
+### 11.3 TokenCounter Module (Planned)
+**Location:** `.gary/scripts/TokenCounter.psm1` (to be created)
+
+**Purpose:** Measure token costs for MCP optimization metrics.
+
+**Proposed Functions:**
+- `Measure-Tokens` - Count tokens in text/files (approximate or API-based)
+- `Measure-McpTools` - Analyze MCP tool schema token costs
+- `Compare-TokenUsage` - Before/after optimization comparison
+- `Find-TokenHogs` - Identify highest-cost items in MCP configuration
+- `Show-TokenBreakdown` - Visual breakdown similar to `/context` output
+
+**Use Cases:**
+- Optimize MCP tool schemas (identify verbose descriptions)
+- Measure token savings from filtering/wrapping
+- Guide documentation length decisions
+- Real-time feedback during slash command development
+
+**Implementation Options:**
+1. **Approximate counting** - Words × 1.3 factor (fast, good enough for optimization)
+2. **tiktoken via Python** - Accurate Claude tokenization (requires Python interop)
+3. **API-based** - Use Claude API for exact counts (requires API key, slower)
+
+**Pattern:**
+```powershell
+# Measure tool schema
+Get-Content .mcp.json | ConvertFrom-Json |
+  Select-Object -ExpandProperty mcpServers |
+  Measure-McpTools
+
+# Find token hogs
+Find-TokenHogs -Path .claude/commands/*.md -Top 10
+
+# Compare optimization
+$before = Measure-Tokens -Path old_schema.json
+$after = Measure-Tokens -Path new_schema.json
+Compare-TokenUsage -Before $before -After $after
+```
+
+**Token Efficiency:**
+- Module itself: ~500 tokens (description + parameters)
+- Replaces need for separate Python token counter tool
+- Leverages existing PWSH_MCP_MODULES infrastructure
+- Direct integration with PowerShell pipeline
+
+## 12. Future Enhancements
+
+### 12.1 Named Sessions (Implemented)
 ```csharp
 public async Task<string> ExecutePowerShell(string script, string sessionId)
 {
@@ -395,12 +591,12 @@ public async Task<string> ExecutePowerShell(string script, string sessionId)
 }
 ```
 
-### 11.2 JEA Integration
+### 12.2 JEA Integration
 - Restricted runspaces
 - Command whitelisting
 - Parameter filtering
 
-### 11.3 Async Execution
+### 12.3 Async Execution
 ```csharp
 // BeginInvoke for long-running commands
 var asyncResult = ps.BeginInvoke();

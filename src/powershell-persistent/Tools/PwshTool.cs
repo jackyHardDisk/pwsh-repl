@@ -25,31 +25,16 @@ public class PwshTool
     [Description("Execute PowerShell script with persistent session state. Variables and state persist across calls within the same session.")]
     public string Pwsh(
         [Description("PowerShell script to execute")] string script,
-        [Description("Session ID (default: 'default'). Use the same session ID to maintain variables across calls.")] string sessionId = "default")
+        [Description("Session ID (default: 'default'). Use the same session ID to maintain variables across calls.")] string sessionId = "default",
+        [Description("Virtual environment path or conda environment name (optional). Activates the environment before script execution.")] string? environment = null,
+        [Description("Initial session state: 'default' (standard cmdlets + current env) or 'create' (minimal blank slate). Default: 'default'")] string initialSessionState = "default")
     {
-        var session = _sessionManager.GetOrCreateSession(sessionId);
+        var session = _sessionManager.GetOrCreateSession(sessionId, environment, initialSessionState);
 
         try
         {
             session.PowerShell.AddScript(script);
             var results = session.PowerShell.Invoke();
-
-            // Check if results contain PowerShell formatting objects
-            bool hasFormattingObjects = results.Any(r =>
-                r?.BaseObject?.GetType().FullName?.StartsWith(
-                    "Microsoft.PowerShell.Commands.Internal.Format",
-                    StringComparison.Ordinal) == true);
-
-            // If formatting objects detected, re-invoke with Out-String to get proper output
-            if (hasFormattingObjects)
-            {
-                session.PowerShell.Commands.Clear();
-                session.PowerShell.Streams.ClearStreams();
-                session.PowerShell.AddScript(script);
-                session.PowerShell.AddCommand("Out-String");
-                session.PowerShell.AddParameter("Stream", false); // Return single string, not per-line
-                results = session.PowerShell.Invoke();
-            }
 
             return FormatResults(results, session.PowerShell);
         }
@@ -59,7 +44,6 @@ public class PwshTool
         }
         finally
         {
-            // Don't check back in - session stays allocated to this sessionId
             session.PowerShell.Commands.Clear();
             session.PowerShell.Streams.ClearStreams();
         }
@@ -69,15 +53,39 @@ public class PwshTool
     {
         var output = new StringBuilder();
 
-        // Format output
+        // Process output stream
         if (results.Count > 0)
         {
+            // Buffer to hold contiguous format objects (preserves table structure)
+            var formatBuffer = new List<PSObject>();
+
             foreach (var result in results)
             {
-                if (result?.BaseObject is string str)
-                    output.AppendLine(str);
+                if (IsFormatObject(result))
+                {
+                    formatBuffer.Add(result);
+                }
                 else
-                    output.AppendLine(result?.ToString() ?? "(null)");
+                {
+                    // Flush buffered format objects first (preserves order)
+                    if (formatBuffer.Count > 0)
+                    {
+                        output.Append(RenderFormatObjects(formatBuffer));
+                        formatBuffer.Clear();
+                    }
+
+                    // Handle normal objects
+                    if (result?.BaseObject is string str)
+                        output.AppendLine(str);
+                    else
+                        output.AppendLine(result?.ToString() ?? "(null)");
+                }
+            }
+
+            // Flush any remaining format objects at the end
+            if (formatBuffer.Count > 0)
+            {
+                output.Append(RenderFormatObjects(formatBuffer));
             }
         }
 
@@ -101,6 +109,82 @@ public class PwshTool
             }
         }
 
+        // Append verbose messages if any
+        if (pwsh.Streams.Verbose.Count > 0)
+        {
+            output.AppendLine("\nVerbose:");
+            foreach (var verbose in pwsh.Streams.Verbose)
+            {
+                output.AppendLine($"  {verbose}");
+            }
+        }
+
+        // Append debug messages if any
+        if (pwsh.Streams.Debug.Count > 0)
+        {
+            output.AppendLine("\nDebug:");
+            foreach (var debug in pwsh.Streams.Debug)
+            {
+                output.AppendLine($"  {debug}");
+            }
+        }
+
+        // Append information messages if any (includes Write-Host)
+        if (pwsh.Streams.Information.Count > 0)
+        {
+            output.AppendLine("\nInformation:");
+            foreach (var info in pwsh.Streams.Information)
+            {
+                output.AppendLine($"  {info}");
+            }
+        }
+
         return output.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// Detects if an object is a PowerShell Internal Format object.
+    /// These are formatting instructions for the host, not data.
+    /// </summary>
+    private static bool IsFormatObject(PSObject? obj)
+    {
+        if (obj?.BaseObject == null) return false;
+
+        var typeName = obj.BaseObject.GetType().FullName;
+        return typeName != null &&
+               typeName.Contains("Microsoft.PowerShell.Commands.Internal.Format");
+    }
+
+    /// <summary>
+    /// Renders Internal.Format objects into a string using a temporary pipeline.
+    /// This avoids re-running the user's script while preserving formatted output.
+    /// </summary>
+    private static string RenderFormatObjects(IEnumerable<PSObject> formatObjects)
+    {
+        try
+        {
+            // Create a lightweight, empty shell just for rendering
+            using var renderPs = PowerShell.Create();
+
+            // Add Out-String with parameters for clean output
+            renderPs.AddCommand("Out-String")
+                    .AddParameter("Stream", false)  // Single string block per table
+                    .AddParameter("Width", 120);    // Prevent aggressive wrapping
+
+            // Invoke passing the existing format objects as input
+            var renderResults = renderPs.Invoke(formatObjects);
+
+            var sb = new StringBuilder();
+            foreach (var item in renderResults)
+            {
+                if (item != null) sb.Append(item.ToString());
+            }
+
+            return sb.ToString();
+        }
+        catch (Exception ex)
+        {
+            return $"[Error rendering format objects: {ex.Message}]";
+        }
     }
 }
