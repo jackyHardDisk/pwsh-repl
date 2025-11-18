@@ -54,7 +54,11 @@
         'Save-Project',
         'Load-Project',
         'Get-BrickStore',
-        'Clear-Stored'
+        'Export-Environment',
+        'Clear-Stored',
+        # Utility
+        'Invoke-WithTimeout',
+        'Invoke-PythonScript'
     )
 
     # Cmdlets to export from this module

@@ -263,6 +263,183 @@ function Get-BrickStore {
     Write-Host ""
 }
 
+function Export-Environment {
+    <#
+    .SYNOPSIS
+    Export current PowerShell session environment variables to JSON/script format.
+
+    .DESCRIPTION
+    Captures and exports the current PowerShell session's environment variables.
+    Useful for debugging MCP server sessions, documenting build environments,
+    or reproducing development environments.
+
+    Can export to JSON (default), PowerShell script, or display to console.
+
+    .PARAMETER Path
+    Output file path. File extension determines format:
+    - .json: JSON format (default)
+    - .ps1: PowerShell script format (executable)
+    - Omit for console output
+
+    .PARAMETER Include
+    Filter to include only matching variables (wildcard supported).
+    Example: "PWSH_*", "PATH", "CONDA_*"
+
+    .PARAMETER Exclude
+    Filter to exclude matching variables (wildcard supported).
+    Example: "*TOKEN*", "*SECRET*", "*PASSWORD*"
+
+    .PARAMETER Format
+    Output format: 'JSON', 'PowerShell', 'Console'. Auto-detected from file extension if Path provided.
+
+    .EXAMPLE
+    PS> Export-Environment
+    Displays all environment variables to console
+
+    .EXAMPLE
+    PS> Export-Environment -Path "env-snapshot.json"
+    Exports all environment variables to JSON file
+
+    .EXAMPLE
+    PS> Export-Environment -Path "restore-env.ps1"
+    Creates executable PowerShell script to restore environment
+
+    .EXAMPLE
+    PS> Export-Environment -Include "PWSH_*","PYTHON*" -Path "mcp-env.json"
+    Exports only MCP-related environment variables
+
+    .EXAMPLE
+    PS> Export-Environment -Exclude "*TOKEN*","*SECRET*" -Path "safe-env.json"
+    Exports environment excluding sensitive variables
+
+    .NOTES
+    JSON format preserves exact values for machine parsing.
+    PowerShell format creates executable script with $env: assignments.
+    Always exclude sensitive data before sharing exports.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Position = 0)]
+        [string]$Path,
+
+        [Parameter()]
+        [string[]]$Include,
+
+        [Parameter()]
+        [string[]]$Exclude,
+
+        [Parameter()]
+        [ValidateSet('JSON', 'PowerShell', 'Console')]
+        [string]$Format
+    )
+
+    # Get all environment variables
+    $envVars = Get-ChildItem Env:
+
+    # Apply Include filter
+    if ($Include) {
+        $envVars = $envVars | Where-Object {
+            $name = $_.Name
+            $Include | Where-Object { $name -like $_ }
+        }
+    }
+
+    # Apply Exclude filter
+    if ($Exclude) {
+        $envVars = $envVars | Where-Object {
+            $name = $_.Name
+            -not ($Exclude | Where-Object { $name -like $_ })
+        }
+    }
+
+    # Auto-detect format from file extension
+    if ($Path -and -not $Format) {
+        if ($Path -match '\.ps1$') {
+            $Format = 'PowerShell'
+        }
+        elseif ($Path -match '\.json$') {
+            $Format = 'JSON'
+        }
+        else {
+            $Format = 'JSON'  # Default
+        }
+    }
+    elseif (-not $Format) {
+        $Format = 'Console'
+    }
+
+    # Build output based on format
+    switch ($Format) {
+        'JSON' {
+            $envHash = @{}
+            foreach ($var in $envVars) {
+                $envHash[$var.Name] = $var.Value
+            }
+
+            $exportData = @{
+                ExportedAt = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+                Machine = $env:COMPUTERNAME
+                User = $env:USERNAME
+                VariableCount = $envHash.Count
+                Variables = $envHash
+            }
+
+            if ($Path) {
+                $exportData | ConvertTo-Json -Depth 5 | Set-Content -Path $Path
+                Write-Host "Exported $($envHash.Count) environment variables to $Path" -ForegroundColor Green
+                Get-Item $Path
+            }
+            else {
+                $exportData | ConvertTo-Json -Depth 5
+            }
+        }
+
+        'PowerShell' {
+            $scriptLines = @(
+                "# Environment variable snapshot",
+                "# Exported: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
+                "# Machine: $env:COMPUTERNAME",
+                "# User: $env:USERNAME",
+                "# Variables: $($envVars.Count)",
+                ""
+            )
+
+            foreach ($var in ($envVars | Sort-Object Name)) {
+                $escapedValue = $var.Value -replace '"', '`"'
+                $scriptLines += "`$env:$($var.Name) = `"$escapedValue`""
+            }
+
+            $script = $scriptLines -join "`n"
+
+            if ($Path) {
+                $script | Set-Content -Path $Path
+                Write-Host "Exported $($envVars.Count) environment variables to $Path" -ForegroundColor Green
+                Get-Item $Path
+            }
+            else {
+                $script
+            }
+        }
+
+        'Console' {
+            Write-Host "`nEnvironment Variables ($($envVars.Count))" -ForegroundColor Cyan
+            Write-Host "=" * 60 -ForegroundColor Cyan
+
+            foreach ($var in ($envVars | Sort-Object Name)) {
+                $displayValue = if ($var.Value.Length -gt 60) {
+                    $var.Value.Substring(0, 57) + "..."
+                }
+                else {
+                    $var.Value
+                }
+                Write-Host "$($var.Name) = $displayValue" -ForegroundColor White
+            }
+
+            Write-Host ""
+        }
+    }
+}
+
 function Clear-Stored {
     <#
     .SYNOPSIS

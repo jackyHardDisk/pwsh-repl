@@ -27,16 +27,31 @@ public class PwshTool
         [Description("PowerShell script to execute")] string script,
         [Description("Session ID (default: 'default'). Use the same session ID to maintain variables across calls.")] string sessionId = "default",
         [Description("Virtual environment path or conda environment name (optional). Activates the environment before script execution.")] string? environment = null,
-        [Description("Initial session state: 'default' (standard cmdlets + current env) or 'create' (minimal blank slate). Default: 'default'")] string initialSessionState = "default")
+        [Description("Initial session state: 'default' (standard cmdlets + current env) or 'create' (minimal blank slate). Default: 'default'")] string initialSessionState = "default",
+        [Description("Timeout in seconds (default: 60). Script execution will be terminated if it exceeds this duration.")] int timeoutSeconds = 60)
     {
         var session = _sessionManager.GetOrCreateSession(sessionId, environment, initialSessionState);
 
         try
         {
             session.PowerShell.AddScript(script);
-            var results = session.PowerShell.Invoke();
 
-            return FormatResults(results, session.PowerShell);
+            // Execute with timeout using async pattern
+            var invokeTask = Task.Run(() => session.PowerShell.Invoke());
+            var timeout = TimeSpan.FromSeconds(timeoutSeconds);
+
+            if (invokeTask.Wait(timeout))
+            {
+                var results = invokeTask.Result;
+                return FormatResults(results, session.PowerShell);
+            }
+            else
+            {
+                // Timeout occurred
+                session.PowerShell.Stop();
+                return $"Error: Script execution timeout after {timeoutSeconds} seconds.\n" +
+                       $"The script was terminated. Consider increasing the timeout parameter or optimizing the script.";
+            }
         }
         catch (Exception ex)
         {

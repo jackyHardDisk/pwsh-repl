@@ -30,7 +30,8 @@ public class DevRunTool
         [Description("Name for stored results (creates $env:name_stdout, $env:name_stderr, $env:name)")] string? name = null,
         [Description("Session ID (default: 'default')")] string sessionId = "default",
         [Description("Virtual environment path or conda environment name (optional). Activates the environment before script execution.")] string? environment = null,
-        [Description("Initial session state: 'default' (standard cmdlets + current env) or 'create' (minimal blank slate). Default: 'default'")] string initialSessionState = "default")
+        [Description("Initial session state: 'default' (standard cmdlets + current env) or 'create' (minimal blank slate). Default: 'default'")] string initialSessionState = "default",
+        [Description("Timeout in seconds (default: 60). Script execution will be terminated if it exceeds this duration.")] int timeoutSeconds = 60)
     {
         var session = _sessionManager.GetOrCreateSession(sessionId, environment, initialSessionState);
 
@@ -69,9 +70,25 @@ public class DevRunTool
             // Environment activation is now handled by SessionManager on session creation
             // No need to activate here
 
-            // Execute script directly (no redirection) to preserve formatted objects
+            // Execute script directly (no redirection) to preserve formatted objects with timeout
             session.PowerShell.AddScript(script);
-            var results = session.PowerShell.Invoke();
+
+            var invokeTask = Task.Run(() => session.PowerShell.Invoke());
+            var timeout = TimeSpan.FromSeconds(timeoutSeconds);
+
+            ICollection<PSObject> results;
+            if (invokeTask.Wait(timeout))
+            {
+                results = invokeTask.Result;
+            }
+            else
+            {
+                // Timeout occurred
+                session.PowerShell.Stop();
+                return $"Error: Script execution timeout after {timeoutSeconds} seconds.\n" +
+                       $"The script was terminated. Consider increasing the timeout parameter or optimizing the script.";
+            }
+
             var exitCode = session.PowerShell.HadErrors ? 1 : 0;
 
             // Capture all output using the same pattern as PwshTool

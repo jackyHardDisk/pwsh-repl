@@ -26,8 +26,8 @@ public class SessionManager : IDisposable
 
         // Include environment and iss in cache key
         string cacheKey = sessionId;
-        if (!string.IsNullOrEmpty(environment))
-            cacheKey = $"{sessionId}:env={environment}";
+        //if (!string.IsNullOrEmpty(environment))
+          //  cacheKey = $"{sessionId}:env={environment}";
         if (initialSessionState != "default")
             cacheKey = $"{cacheKey}:iss={initialSessionState}";
 
@@ -68,6 +68,9 @@ public class SessionManager : IDisposable
 
         var pwsh = PowerShell.Create();
         pwsh.Runspace = runspace;
+
+        // Note: stdin handle is closed at Windows API level in Program.cs
+        // Child processes inherit INVALID_HANDLE_VALUE for stdin, preventing hangs
 
         // Activate environment if specified (BEFORE modules)
         if (!string.IsNullOrEmpty(environment))
@@ -116,10 +119,33 @@ public class SessionManager : IDisposable
             }
             else
             {
-                // Assume conda environment name
-                pwsh.AddScript($"conda activate {environment}");
-                pwsh.Invoke();
-                Console.Error.WriteLine($"SessionManager: Activated conda environment: '{environment}'");
+                // Assume conda environment name - resolve to path and prepend to PATH
+                pwsh.AddScript($"conda info --envs --json | ConvertFrom-Json | Select-Object -ExpandProperty envs | Where-Object {{ $_ -like '*{environment}' }}");
+                var condaPathResult = pwsh.Invoke();
+                pwsh.Commands.Clear();
+
+                if (condaPathResult.Count > 0 && condaPathResult[0] != null)
+                {
+                    var envPath = condaPathResult[0].ToString();
+
+                    if (Directory.Exists(envPath))
+                    {
+                        // Prepend conda environment root to PATH
+                        pwsh.AddScript($"$env:Path = '{envPath};' + $env:Path");
+                        pwsh.Invoke();
+                        pwsh.Commands.Clear();
+
+                        Console.Error.WriteLine($"SessionManager: Activated conda environment '{environment}' via PATH: {envPath}");
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine($"SessionManager: Warning - conda environment path '{envPath}' does not exist");
+                    }
+                }
+                else
+                {
+                    Console.Error.WriteLine($"SessionManager: Warning - conda environment '{environment}' not found");
+                }
             }
 
             pwsh.Commands.Clear();

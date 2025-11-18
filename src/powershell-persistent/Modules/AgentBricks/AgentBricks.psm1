@@ -14,6 +14,8 @@ $global:BrickStore = @{
 . $PSScriptRoot/Core/Extract.ps1
 . $PSScriptRoot/Core/Analyze.ps1
 . $PSScriptRoot/Core/Present.ps1
+. $PSScriptRoot/Core/Timeout.ps1
+. $PSScriptRoot/Core/Python.ps1
 
 # Meta-tools
 . $PSScriptRoot/Meta/Discovery.ps1
@@ -55,33 +57,5 @@ Write-Host ""
 Write-Host "Pre-loaded patterns: $($global:BrickStore.Patterns.Count)" -ForegroundColor Green
 Write-Host ""
 
-# Export module members (also defined in .psd1 manifest)
-Export-ModuleMember -Function @(
-    # Transform
-    'Format-Count',
-    'Group-By',
-    'Measure-Frequency',
-    # Extract
-    'Extract-Regex',
-    'Extract-Between',
-    'Extract-Column',
-    # Analyze
-    'Find-Errors',
-    'Find-Warnings',
-    'Parse-BuildOutput',
-    # Present
-    'Show',
-    'Export-ToFile',
-    # Meta - Discovery
-    'Find-ProjectTools',
-    # Meta - Learning
-    'Set-Pattern',
-    'Get-Patterns',
-    'Test-Pattern',
-    'Learn-OutputPattern',
-    # State
-    'Save-Project',
-    'Load-Project',
-    'Get-BrickStore',
-    'Clear-Stored'
-) -Variable 'BrickStore'
+# Export controlled by manifest (.psd1 FunctionsToExport and VariablesToExport)
+# No Export-ModuleMember needed when using manifest
