@@ -519,3 +519,70 @@ function Clear-Stored {
         Write-Warning "All learned patterns removed! Use Load-Project to restore from .brickyard.json"
     }
 }
+
+function Set-EnvironmentTee {
+    <#
+    .SYNOPSIS
+    Capture pipeline input to environment variable while passing through.
+
+    .DESCRIPTION
+    Tee-style function that stores all pipeline input to an environment variable
+    while simultaneously passing all items through to the next pipeline stage.
+
+    Forces full enumeration to guarantee all items are captured, then returns
+    all items for continued processing. Useful for non-destructive analysis where
+    you want to capture full output while still allowing downstream filtering.
+
+    .PARAMETER InputObject
+    Pipeline input to capture and pass through.
+
+    .PARAMETER Name
+    Environment variable name (without $ env: prefix).
+
+    .EXAMPLE
+    PS> Get-Process | Set-EnvironmentTee -Name "procs" | Select-Object -First 5
+    Captures all processes to $env:procs, displays first 5
+
+    .EXAMPLE
+    PS> dev_run("dotnet build", "build")
+    PS> $env:build_stderr | Set-EnvironmentTee -Name "build_archive" | Find-Errors | Show -Top 10
+    Archives full output, shows top 10 errors
+
+    .EXAMPLE
+    PS> "error","warning","error","info" | Set-EnvironmentTee -Name "test" -Verbose | Measure-Frequency
+    VERBOSE: Tee: error
+    VERBOSE: Tee: warning
+    VERBOSE: Tee: error
+    VERBOSE: Tee: info
+    VERBOSE: Stored 4 items to $env:test
+
+    .NOTES
+    Use -Verbose to see items as they're captured.
+    Stored as Out-String formatted text for easy retrieval and analysis.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(ValueFromPipeline, Mandatory)]
+        $InputObject,
+
+        [Parameter(Position=0, Mandatory)]
+        [string]$Name
+    )
+
+    begin {
+        $items = @()
+    }
+
+    process {
+        $items += $InputObject
+        if ($VerbosePreference -eq 'Continue') {
+            Write-Verbose "Tee: $_"
+        }
+    }
+
+    end {
+        Set-Item "env:$Name" -Value ($items | Out-String)
+        Write-Verbose "Stored $($items.Count) items to `$env:$Name"
+        $items
+    }
+}

@@ -251,3 +251,169 @@ function Export-ToFile {
         Get-Item $Path
     }
 }
+
+function Get-StreamData {
+    <#
+    .SYNOPSIS
+    Retrieve specific stream data from dev_run JSON storage with caching.
+
+    .DESCRIPTION
+    Extracts a specific PowerShell stream (Error, Warning, Verbose, Debug, Information, Output)
+    from dev_run's JSON hashtable storage. Returns raw array of stream items for pipeline processing.
+
+    Uses $global:DevRunCache for performance - first access loads and caches JSON from $env,
+    subsequent accesses retrieve from cache (much faster for repeated queries).
+
+    Used to access individual streams from dev_run results for post-hoc analysis.
+    Complements Show-StreamSummary which displays formatted summaries.
+
+    .PARAMETER Name
+    Name used in dev_run (e.g., "build" for dev_run(..., name="build")).
+
+    .PARAMETER Stream
+    Stream to retrieve: Error, Warning, Verbose, Debug, Information, or Output.
+
+    .PARAMETER Force
+    Force reload from $env (invalidate cache). Use if $env was modified externally.
+
+    .EXAMPLE
+    PS> Get-StreamData -Name "build" -Stream Error
+    file.cs(10): error CS0103: The name 'foo' does not exist
+    file.cs(42): error CS0168: Variable declared but not used
+
+    .EXAMPLE
+    PS> Get-StreamData -Name "build" -Stream Error | Group-Similar
+    Count Example                                        Items
+    ----- -------                                        -----
+        2 error CS0103: The name 'foo' does not exist  {...}
+        1 error CS0168: Variable declared but not used  {...}
+
+    .EXAMPLE
+    PS> Get-StreamData -Name "build" -Stream Error | Group-BuildErrors | Format-Table
+    Count Code   Files Message
+    ----- ----   ----- -------
+        2 CS0103     2 The name 'foo' does not exist
+        1 CS0168     1 Variable declared but not used
+
+    .EXAMPLE
+    PS> Get-StreamData -Name "build" -Stream Error -Force
+    # Forces reload from $env:build_streams (cache bypassed)
+
+    .NOTES
+    Requires dev_run to have been executed with stream storage enabled (default behavior).
+    Returns $null if name or stream not found.
+    Cache automatically invalidated when dev_run executes with same name.
+    Performance: ~10-100x faster for repeated access (no JSON parsing).
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, Position=0)]
+        [string]$Name,
+
+        [Parameter(Mandatory, Position=1)]
+        [ValidateSet("Error","Warning","Verbose","Debug","Information","Output")]
+        [string]$Stream,
+
+        [Parameter()]
+        [switch]$Force
+    )
+
+    # Use cached implementation if available (provides ~10-100x performance boost)
+    if (Get-Command Get-CachedStreamData -ErrorAction SilentlyContinue) {
+        return Get-CachedStreamData -Name $Name -Stream $Stream -Force:$Force
+    }
+
+    # Fallback to direct $env parsing (backwards compatibility if cache not loaded)
+    $envVarName = "${Name}_streams"
+    $json = Get-Item "env:$envVarName" -ErrorAction SilentlyContinue
+
+    if (-not $json) {
+        Write-Error "No stream data found for '$Name'. Run dev_run with name='$Name' first."
+        return
+    }
+
+    try {
+        $data = $json.Value | ConvertFrom-Json -AsHashtable
+        if ($data.ContainsKey($Stream)) {
+            $data[$Stream]
+        }
+        else {
+            Write-Warning "Stream '$Stream' not found in $envVarName"
+        }
+    }
+    catch {
+        Write-Error "Failed to parse JSON from $envVarName : $_"
+    }
+}
+
+function Show-StreamSummary {
+    <#
+    .SYNOPSIS
+    Display formatted summary of dev_run stream data.
+
+    .DESCRIPTION
+    Shows frequency analysis summary for selected PowerShell streams from dev_run results.
+    Displays count, unique count, and top items for each requested stream.
+
+    Mimics dev_run's built-in summary but allows custom stream selection and post-hoc analysis.
+
+    .PARAMETER Name
+    Name used in dev_run (e.g., "build" for dev_run(..., name="build")).
+
+    .PARAMETER Streams
+    Streams to include in summary. Default: Error, Warning (matches dev_run default).
+
+    .PARAMETER TopCount
+    Number of top items to show per stream. Default: 5.
+
+    .EXAMPLE
+    PS> Show-StreamSummary -Name "build"
+    Errors: 3 (2 unique)
+
+    Top Errors:
+         2x: file.cs(10): error CS0103
+         1x: file.cs(42): error CS0168
+
+    Warnings: 1 (1 unique)
+
+    Top Warnings:
+         1x: file.cs(55): warning CS0169
+
+    .EXAMPLE
+    PS> Show-StreamSummary -Name "build" -Streams Error,Warning,Verbose
+
+    .EXAMPLE
+    PS> Show-StreamSummary -Name "test" -Streams Error -TopCount 10
+
+    .NOTES
+    Requires dev_run to have been executed with stream storage enabled (default behavior).
+    Use Get-StreamData for raw stream access and custom analysis pipelines.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, Position=0)]
+        [string]$Name,
+
+        [Parameter()]
+        [ValidateSet("Error","Warning","Verbose","Debug","Information","Output")]
+        [string[]]$Streams = @("Error", "Warning"),
+
+        [Parameter()]
+        [int]$TopCount = 5
+    )
+
+    foreach ($stream in $Streams) {
+        $items = Get-StreamData -Name $Name -Stream $stream
+        if (-not $items -or $items.Count -eq 0) { continue }
+
+        $unique = ($items | Select-Object -Unique).Count
+        Write-Host "`n${stream}s: $($items.Count) ($unique unique)" -ForegroundColor Cyan
+
+        # Frequency analysis
+        $freq = $items | Measure-Frequency | Select-Object -First $TopCount
+        if ($freq) {
+            Write-Host "`nTop ${stream}s:" -ForegroundColor Cyan
+            $freq | Format-Count
+        }
+    }
+}

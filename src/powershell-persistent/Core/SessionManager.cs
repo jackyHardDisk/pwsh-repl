@@ -159,6 +159,50 @@ public class SessionManager : IDisposable
         }
     }
 
+    private void OutputAgentBricksManifest(PowerShell pwsh)
+    {
+        try
+        {
+            // Get function list grouped by category
+            var script = @"
+$functions = Get-Command -Module AgentBricks | Sort-Object Name
+$grouped = @{
+    Transform = @('Format-Count', 'Group-By', 'Measure-Frequency', 'Group-Similar', 'Group-BuildErrors')
+    Extract = @('Extract-Regex', 'Extract-Between', 'Extract-Column')
+    Analyze = @('Find-Errors', 'Find-Warnings', 'Parse-BuildOutput')
+    Present = @('Show', 'Export-ToFile', 'Get-StreamData', 'Show-StreamSummary')
+    Meta = @('Find-ProjectTools', 'Set-Pattern', 'Get-Patterns', 'Test-Pattern', 'Learn-OutputPattern')
+    State = @('Save-Project', 'Load-Project', 'Get-BrickStore', 'Export-Environment', 'Clear-Stored', 'Set-EnvironmentTee')
+    DevRunCache = @('Initialize-DevRunCache', 'Get-CachedStreamData', 'Clear-DevRunCache', 'Get-DevRunCacheStats')
+    Script = @('Add-DevScript', 'Get-DevScripts', 'Remove-DevScript', 'Update-DevScriptMetadata', 'Invoke-DevScript', 'Invoke-DevScriptChain')
+    Utility = @('Invoke-WithTimeout', 'Invoke-PythonScript')
+}
+
+$output = @('AgentBricks Functions:')
+foreach ($category in $grouped.Keys | Sort-Object) {
+    $funcs = $grouped[$category] | Where-Object { $functions.Name -contains $_ }
+    if ($funcs) {
+        $output += ""  $category`: $($funcs -join ', ')""
+    }
+}
+$output -join ""`n""
+";
+            pwsh.AddScript(script);
+            var result = pwsh.Invoke();
+            pwsh.Commands.Clear();
+            pwsh.Streams.ClearStreams();
+
+            if (result.Count > 0 && result[0] != null)
+            {
+                Console.Error.WriteLine(result[0].ToString());
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"SessionManager: Failed to generate AgentBricks manifest: {ex.Message}");
+        }
+    }
+
     private void LoadModule(PowerShell pwsh, string moduleName, string modulePath, bool validateAgentBricks = false)
     {
         try
@@ -185,6 +229,9 @@ public class SessionManager : IDisposable
                     else
                     {
                         Console.Error.WriteLine($"SessionManager: Loaded {moduleName} module ({testResult[0]} patterns)");
+
+                        // Output function manifest
+                        OutputAgentBricksManifest(pwsh);
                     }
                 }
                 else

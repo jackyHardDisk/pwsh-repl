@@ -23,6 +23,7 @@ $global:BrickStore = @{
 
 # State management
 . $PSScriptRoot/State/Management.ps1
+. $PSScriptRoot/State/DevRunCache.ps1
 
 # Pre-configured patterns (automatically register on import)
 . $PSScriptRoot/Patterns/JavaScript.ps1
@@ -34,28 +35,12 @@ $global:BrickStore = @{
 if (Test-Path ".brickyard.json") {
     try {
         Load-Project -Path ".brickyard.json" -ErrorAction SilentlyContinue
-        Write-Host "Loaded project patterns from .brickyard.json" -ForegroundColor Green
+        Write-Verbose "Loaded project patterns from .brickyard.json"
     }
     catch {
         # Silently continue if load fails
     }
 }
-
-# Module banner
-Write-Host ""
-Write-Host "╔════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║          AgentBricks - Development Toolkit            ║" -ForegroundColor Cyan
-Write-Host "║                     v0.1.0 POC                         ║" -ForegroundColor Cyan
-Write-Host "╚════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Quick Start:" -ForegroundColor White
-Write-Host "  Get-BrickStore       - View loaded patterns and state" -ForegroundColor Gray
-Write-Host "  Find-ProjectTools    - Discover available tools" -ForegroundColor Gray
-Write-Host "  Get-Patterns         - List learned patterns" -ForegroundColor Gray
-Write-Host "  Get-Help <function>  - Full documentation" -ForegroundColor Gray
-Write-Host ""
-Write-Host "Pre-loaded patterns: $($global:BrickStore.Patterns.Count)" -ForegroundColor Green
-Write-Host ""
 
 # Export controlled by manifest (.psd1 FunctionsToExport and VariablesToExport)
 # No Export-ModuleMember needed when using manifest

@@ -15,18 +15,22 @@ AgentBricks is a self-teaching PowerShell module that provides concrete developm
 
 ```
 AgentBricks/
-├── AgentBricks.psd1           # Module manifest (20 exported functions)
+├── AgentBricks.psd1           # Module manifest (35 exported functions)
 ├── AgentBricks.psm1           # Main module (BrickStore initialization, auto-loads patterns)
 ├── Core/
-│   ├── Transform.ps1          # Format-Count, Group-By, Measure-Frequency
+│   ├── Transform.ps1          # Format-Count, Group-By, Measure-Frequency, Group-Similar, Group-BuildErrors
 │   ├── Extract.ps1            # Extract-Regex, Extract-Between, Extract-Column
 │   ├── Analyze.ps1            # Find-Errors, Find-Warnings, Parse-BuildOutput
-│   └── Present.ps1            # Show, Export-ToFile
+│   └── Present.ps1            # Show, Export-ToFile, Get-StreamData, Show-StreamSummary
 ├── Meta/
 │   ├── Discovery.ps1          # Find-ProjectTools
 │   └── Learning.ps1           # Set-Pattern, Get-Patterns, Test-Pattern, Learn-OutputPattern
 ├── State/
-│   └── Management.ps1         # Save-Project, Load-Project, Get-BrickStore, Clear-Stored
+│   ├── Management.ps1         # Save-Project, Load-Project, Get-BrickStore, Export-Environment, Clear-Stored, Set-EnvironmentTee
+│   └── DevRunCache.ps1        # Initialize-DevRunCache, Get-DevRunCacheStats, Get-CachedStreamData, Clear-DevRunCache
+│   └── DevRunScripts.ps1      # Add-DevScript, Get-DevScripts, Remove-DevScript, Update-DevScriptMetadata, Invoke-DevScript, Invoke-DevScriptChain
+├── Utility/
+│   └── Common.ps1             # Invoke-WithTimeout, Invoke-PythonScript
 └── Patterns/
     ├── JavaScript.ps1         # ESLint, Stylelint, TypeScript, Prettier, Vite, Webpack, Jest, Node.js (8)
     ├── Python.ps1             # Pytest, Mypy, Flake8, Black, Pylint, unittest, Coverage, tracebacks (10)
@@ -36,7 +40,7 @@ AgentBricks/
 
 ## Function Categories
 
-### Transform Functions (3)
+### Transform Functions (5)
 
 **Format-Count** - Format frequency counts with aligned "Nx: item" format
 
@@ -76,6 +80,41 @@ Get-Content build.log | Select-String "error" | Measure-Frequency
 #   1x: b
 #   1x: c
 #   3x: a
+```
+
+**Group-Similar** - Fuzzy grouping with Jaro-Winkler distance
+
+```powershell
+# Group similar error messages (default 85% similarity)
+Find-Errors build.log | Group-Similar -Threshold 0.85
+# Count: 42
+# Example: error: Cannot find module 'foo'
+# Items: [array of similar errors]
+
+# Group by property with custom threshold
+Parse-BuildOutput | Group-Similar -Property message -Threshold 0.90
+
+# Works with any text
+"hello world", "helo world", "goodbye" | Group-Similar -Threshold 0.80
+```
+
+**Group-BuildErrors** - Pattern-aware build error grouping with fuzzy matching
+
+```powershell
+# Group MSBuild errors by code and similar messages
+Find-Errors build.log | Group-BuildErrors -Pattern "MSBuild-Error" -Threshold 0.85
+# Count: 42
+# Code: CS0103
+# Message: The name 'foo' does not exist in the current context
+# Files: 8
+
+# Group GCC errors
+Parse-BuildOutput gcc.log | Group-BuildErrors -Pattern "GCC" -Threshold 0.90
+
+# Use with custom patterns
+Get-Patterns | Where-Object Category -eq 'error' | ForEach-Object {
+    Find-Errors log | Group-BuildErrors -Pattern $_.Name
+}
 ```
 
 ### Extract Functions (3)
@@ -147,7 +186,7 @@ Parse-BuildOutput gcc.log | Group-By Severity | Format-Count
 #  12x: warning
 ```
 
-### Present Functions (2)
+### Present Functions (4)
 
 **Show** - Display results with optional filtering and formatting
 
@@ -173,6 +212,45 @@ Get-Patterns | Export-ToFile -Path patterns.csv -Format Csv
 
 Measure-Frequency | Export-ToFile -Path stats.json -Format Json
 # Export as JSON
+```
+
+**Get-StreamData** - Retrieve specific stream from dev_run JSON storage
+
+```powershell
+# Get error stream from build run
+Get-StreamData -Name "build" -Stream "Error"
+
+# Get output stream
+Get-StreamData -Name "test" -Stream "Output"
+
+# Pipeline for analysis
+Get-StreamData build Error | Measure-Frequency | Format-Count
+#  42x: CS0103: The name 'foo' does not exist
+#   8x: CS0246: Type or namespace not found
+
+# Combine streams
+Get-StreamData build Error | Group-Similar -Threshold 0.85
+```
+
+**Show-StreamSummary** - Display formatted summary of dev_run streams
+
+```powershell
+# Show default streams (Error, Warning)
+Show-StreamSummary -Name "build"
+
+# Show specific streams
+Show-StreamSummary -Name "test" -Streams Error,Warning,Output
+
+# Custom top count
+Show-StreamSummary -Name "build" -Streams Error -TopCount 10
+
+# Output:
+# Errors: 42 (5 unique)
+#
+# Top Errors:
+#     8x: CS0103: The name 'foo' does not exist
+#     3x: CS0246: Type or namespace not found
+#     1x: CS1002: ; expected
 ```
 
 ### Meta-Discovery (1)
@@ -260,7 +338,7 @@ Auto-detects common patterns:
 - Test-style: `STATUS test - message`
 - Generic: `severity: message`
 
-### State Management (4)
+### State Management (6)
 
 **Save-Project** - Save BrickStore state to .brickyard.json
 
@@ -286,6 +364,16 @@ Get-BrickStore -Detailed
 # Full dump of all stored data
 ```
 
+**Export-Environment** - Export current environment variables to JSON file
+
+```powershell
+Export-Environment -Path "session.json"
+# Saves all $env: variables to file
+
+Export-Environment -Path "build-vars.json" -Filter "build_*"
+# Export only matching variables
+```
+
 **Clear-Stored** - Reset BrickStore state
 
 ```powershell
@@ -294,6 +382,140 @@ Clear-Stored
 
 Clear-Stored -PatternOnly
 # Keep results/chains, clear patterns only
+```
+
+**Set-EnvironmentTee** - Capture pipeline items to $env variable while passing through
+
+```powershell
+# Capture errors while displaying
+Find-Errors build.log | Set-EnvironmentTee -Name "captured_errors" | Show -Top 5
+
+# Later access captured data
+$env:captured_errors | Measure-Frequency
+
+# Chain with analysis
+Parse-BuildOutput |
+    Set-EnvironmentTee -Name "all_issues" |
+    Where-Object Severity -eq 'error' |
+    Group-By Code |
+    Format-Count
+
+# Verbose shows what's being captured
+Find-Warnings | Set-EnvironmentTee -Name "warnings" -Verbose
+```
+
+### DevRun Cache (4 functions)
+
+**Initialize-DevRunCache** - Initialize ConcurrentDictionary cache structures
+
+```powershell
+Initialize-DevRunCache
+# Creates $global:DevRunCache and $global:DevRunScripts
+# Called automatically on module load
+```
+
+**Get-DevRunCacheStats** - Display cache statistics
+
+```powershell
+Get-DevRunCacheStats
+# Output:
+# DevRun Cache Statistics
+# =======================
+# Cached Streams: 0
+# Script Registry: 3
+```
+
+**Get-CachedStreamData** - Retrieve stream data with caching (performance optimized)
+
+```powershell
+# First call: parses JSON from $env, caches result
+Get-CachedStreamData -Name "build" -Stream "Error"
+
+# Subsequent calls: returns from cache (faster)
+Get-CachedStreamData -Name "build" -Stream "Error"
+```
+
+**Clear-DevRunCache** - Clear all cached stream data
+
+```powershell
+Clear-DevRunCache
+# Clears $global:DevRunCache
+```
+
+### DevRun Scripts (6 functions)
+
+**Add-DevScript** - Register script metadata in global registry
+
+```powershell
+# Basic registration
+Add-DevScript -Name "build" -Script "dotnet build"
+
+# With dependencies
+Add-DevScript -Name "test" -Script "dotnet test" -Dependencies @("build")
+
+# With exit code tracking
+Add-DevScript -Name "deploy" -Script "kubectl apply -f app.yaml" -ExitCode 0
+```
+
+**Get-DevScripts** - List all registered scripts with metadata
+
+```powershell
+Get-DevScripts
+# Name         Timestamp           ExitCode Dependencies
+# ----         ---------           -------- ------------
+# build        2025-11-18 13:47:46        0
+# test         2025-11-18 13:48:12        0 build
+# deploy       2025-11-18 13:49:01        0 test
+```
+
+**Remove-DevScript** - Remove script from registry
+
+```powershell
+Remove-DevScript -Name "test"
+# Removed script 'test' from registry
+```
+
+**Update-DevScriptMetadata** - Update script metadata after execution
+
+```powershell
+Update-DevScriptMetadata -Name "build" -ExitCode 1
+# Updates timestamp and exit code
+```
+
+**Invoke-DevScript** - Execute a registered script
+
+```powershell
+# Basic invocation
+Invoke-DevScript -Name "build"
+
+# Update metadata after execution
+Invoke-DevScript -Name "build" -UpdateMetadata
+
+# Return output for further processing
+$result = Invoke-DevScript -Name "build" -PassThru
+```
+
+**Invoke-DevScriptChain** - Execute multiple scripts in sequence
+
+```powershell
+# Basic chain (stops on first failure)
+Invoke-DevScriptChain -Names @("build", "test", "deploy")
+
+# Continue even if scripts fail
+Invoke-DevScriptChain -Names @("lint", "format", "build") -ContinueOnError
+
+# Update metadata for each script
+Invoke-DevScriptChain -Names @("build", "test") -UpdateMetadata
+
+# Output:
+# Executing: build
+# Executing: test
+#
+# Chain Summary:
+#   Total scripts: 2
+#   Executed: 2
+#   Successful: 2
+#   Failed: 0
 ```
 
 ## Pre-Configured Patterns (40+)
@@ -440,6 +662,42 @@ Save-Project -Path "company-patterns.json"
 Load-Project -Path "C:\shared\company-patterns.json"
 Get-Patterns -Name "*company*"
 # Pattern available immediately
+```
+
+### Workflow 5: DevRun Script Automation (NEW)
+
+```powershell
+# Run build with dev_run (auto-registers script)
+dev_run "dotnet build" -name "build"
+
+# Run tests with dev_run (auto-registers script)
+dev_run "dotnet test" -name "test"
+
+# View registered scripts
+Get-DevScripts
+# Name   Timestamp           ExitCode Dependencies
+# ----   ---------           -------- ------------
+# build  2025-11-18 13:47:46        0
+# test   2025-11-18 13:48:12        0
+
+# Chain them together for CI/CD
+Invoke-DevScriptChain -Names @("build", "test")
+# Executing: build
+# Executing: test
+#
+# Chain Summary:
+#   Total scripts: 2
+#   Executed: 2
+#   Successful: 2
+#   Failed: 0
+
+# Analyze errors from build
+Get-StreamData build Error | Group-Similar -Threshold 0.85 | Show -Top 5
+
+# Combine outputs from both runs
+@("build", "test") | ForEach-Object {
+    Get-StreamData -Name $_ -Stream "Output"
+} | Measure-Frequency | Format-Count
 ```
 
 ## Auto-Loading Behavior

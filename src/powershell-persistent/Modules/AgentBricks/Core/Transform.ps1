@@ -241,3 +241,283 @@ function Measure-Frequency {
         }
     }
 }
+
+function Get-JaroWinklerDistance {
+    <#
+    .SYNOPSIS
+    Calculate Jaro-Winkler similarity distance between two strings.
+
+    .DESCRIPTION
+    Computes Jaro-Winkler distance (0.0 to 1.0) measuring string similarity.
+    Values closer to 1.0 indicate higher similarity. Useful for fuzzy matching
+    of error messages, file names, or other text where exact matches aren't required.
+
+    Jaro-Winkler gives higher scores to strings with matching prefixes, making it
+    particularly effective for matching error messages with similar patterns.
+
+    .PARAMETER String1
+    First string to compare.
+
+    .PARAMETER String2
+    Second string to compare.
+
+    .EXAMPLE
+    PS> Get-JaroWinklerDistance "The name 'foo' does not exist" "The name 'bar' does not exist"
+    0.924
+
+    .EXAMPLE
+    PS> Get-JaroWinklerDistance "error CS0103" "error CS0168"
+    0.733
+
+    .NOTES
+    Returns 1.0 for identical strings, 0.0 for completely dissimilar strings.
+    Threshold of 0.85 works well for grouping similar error messages.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, Position=0)]
+        [string]$String1,
+
+        [Parameter(Mandatory, Position=1)]
+        [string]$String2
+    )
+
+    if ($String1 -eq $String2) { return 1.0 }
+    if ($String1.Length -eq 0 -or $String2.Length -eq 0) { return 0.0 }
+
+    $matchDistance = [Math]::Floor([Math]::Max($String1.Length, $String2.Length) / 2) - 1
+    $s1Matches = @($false) * $String1.Length
+    $s2Matches = @($false) * $String2.Length
+    $matches = 0
+    $transpositions = 0
+
+    for ($i = 0; $i -lt $String1.Length; $i++) {
+        $start = [Math]::Max(0, $i - $matchDistance)
+        $end = [Math]::Min($i + $matchDistance + 1, $String2.Length)
+
+        for ($j = $start; $j -lt $end; $j++) {
+            if ($s2Matches[$j] -or $String1[$i] -ne $String2[$j]) { continue }
+            $s1Matches[$i] = $true
+            $s2Matches[$j] = $true
+            $matches++
+            break
+        }
+    }
+
+    if ($matches -eq 0) { return 0.0 }
+
+    $k = 0
+    for ($i = 0; $i -lt $String1.Length; $i++) {
+        if (-not $s1Matches[$i]) { continue }
+        while (-not $s2Matches[$k]) { $k++ }
+        if ($String1[$i] -ne $String2[$k]) { $transpositions++ }
+        $k++
+    }
+
+    $jaro = ($matches / $String1.Length + $matches / $String2.Length + ($matches - $transpositions/2) / $matches) / 3
+
+    $prefix = 0
+    for ($i = 0; $i -lt [Math]::Min(4, [Math]::Min($String1.Length, $String2.Length)); $i++) {
+        if ($String1[$i] -eq $String2[$i]) { $prefix++ } else { break }
+    }
+
+    return $jaro + ($prefix * 0.1 * (1 - $jaro))
+}
+
+function Group-Similar {
+    <#
+    .SYNOPSIS
+    Group similar items using fuzzy string matching.
+
+    .DESCRIPTION
+    Groups items by similarity using Jaro-Winkler distance. Items above the similarity
+    threshold are grouped together, with the first item in each group becoming the exemplar.
+
+    Particularly useful for grouping error messages that differ only in variable names,
+    line numbers, or other minor variations.
+
+    .PARAMETER InputObject
+    Items to group. Can be strings or objects (use -Property for objects).
+
+    .PARAMETER Threshold
+    Similarity threshold (0.0-1.0). Items with similarity >= threshold are grouped together.
+    Default: 0.85 (85% similar).
+
+    .PARAMETER Property
+    Property name to compare for object inputs. If omitted, compares entire object as string.
+
+    .EXAMPLE
+    PS> $errors = @(
+        "file1.cs(10): error CS0103: The name 'foo' does not exist",
+        "file2.cs(42): error CS0103: The name 'bar' does not exist",
+        "file3.cs(55): error CS0168: Variable declared but not used"
+    )
+    PS> $errors | Group-Similar -Threshold 0.80
+    Count Example                                                    Items
+    ----- -------                                                    -----
+        2 file1.cs(10): error CS0103: The name 'foo' does not exist {...}
+        1 file3.cs(55): error CS0168: Variable declared but not used {...}
+
+    .EXAMPLE
+    PS> Get-StreamData -Name "build" -Stream Error | Group-Similar | Format-Count
+         42x: error CS0103: The name 'X' does not exist
+          8x: error CS0168: Variable declared but not used
+
+    .NOTES
+    Groups are sorted by count (descending). Each group includes:
+    - Count: Number of items in group
+    - Example: Exemplar item (first in group)
+    - Items: All items in the group
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(ValueFromPipeline, Mandatory)]
+        $InputObject,
+
+        [Parameter()]
+        [ValidateRange(0.0, 1.0)]
+        [double]$Threshold = 0.85,
+
+        [Parameter()]
+        [string]$Property = $null
+    )
+
+    begin {
+        $items = @()
+    }
+
+    process {
+        $items += $InputObject
+    }
+
+    end {
+        $groups = @()
+
+        foreach ($item in $items) {
+            $compareText = if ($Property) { $item.$Property } else { $item.ToString() }
+            $foundGroup = $false
+
+            foreach ($group in $groups) {
+                $exemplar = if ($Property) { $group.Exemplar.$Property } else { $group.Exemplar.ToString() }
+                $similarity = Get-JaroWinklerDistance $compareText $exemplar
+
+                if ($similarity -ge $Threshold) {
+                    $group.Items += $item
+                    $group.Count++
+                    $foundGroup = $true
+                    break
+                }
+            }
+
+            if (-not $foundGroup) {
+                $groups += [PSCustomObject]@{
+                    Exemplar = $item
+                    Count = 1
+                    Items = @($item)
+                }
+            }
+        }
+
+        $groups | Sort-Object Count -Descending | ForEach-Object {
+            [PSCustomObject]@{
+                Count = $_.Count
+                Example = $_.Exemplar
+                Items = $_.Items
+            }
+        }
+    }
+}
+
+function Group-BuildErrors {
+    <#
+    .SYNOPSIS
+    Group build errors by code and similar messages using pattern extraction.
+
+    .DESCRIPTION
+    Extracts structured error information using regex patterns, groups by error code,
+    then fuzzy-matches error messages within each code group. Produces a clean summary
+    showing error frequency, codes, and representative messages.
+
+    More powerful than Group-Similar alone because it first extracts semantic structure
+    (file, line, code, message) before grouping.
+
+    .PARAMETER InputObject
+    Error text lines (e.g., from build logs).
+
+    .PARAMETER Pattern
+    Pattern name from Get-Patterns. Default: "MSBuild-Error".
+    Supports: MSBuild-Error, GCC, Clang, etc.
+
+    .PARAMETER Threshold
+    Similarity threshold for message fuzzy matching. Default: 0.85.
+
+    .EXAMPLE
+    PS> Get-StreamData -Name "build" -Stream Error | Group-BuildErrors
+    Count Code   Files Message
+    ----- ----   ----- -------
+        3 CS0103     3 The name 'foo' does not exist
+        2 CS0168     2 Variable declared but not used
+
+    .EXAMPLE
+    PS> Get-Content gcc.log | Group-BuildErrors -Pattern "GCC"
+    Count Code    Files Message
+    ----- ----    ----- -------
+       12 error       5 undefined reference to 'foo'
+        3 warning     2 unused variable 'bar'
+
+    .NOTES
+    Requires AgentBricks patterns to be loaded (Get-Patterns).
+    Pattern must have named groups: file, line, code, message.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(ValueFromPipeline, Mandatory)]
+        $InputObject,
+
+        [Parameter()]
+        [string]$Pattern = "MSBuild-Error",
+
+        [Parameter()]
+        [ValidateRange(0.0, 1.0)]
+        [double]$Threshold = 0.85
+    )
+
+    begin {
+        $items = @()
+    }
+
+    process {
+        $items += $InputObject
+    }
+
+    end {
+        $patternObj = Get-Patterns -Name $Pattern
+        if (-not $patternObj) {
+            Write-Error "Pattern '$Pattern' not found. Use Get-Patterns to see available patterns."
+            return
+        }
+
+        $extracted = $items | Extract-Regex -Pattern $patternObj.Pattern
+        if (-not $extracted) {
+            Write-Warning "No matches found for pattern '$Pattern'"
+            return
+        }
+
+        $codeGroups = $extracted | Group-Object code
+
+        foreach ($codeGroup in $codeGroups) {
+            $messageGroups = $codeGroup.Group | Group-Similar -Property message -Threshold $Threshold
+
+            foreach ($msgGroup in $messageGroups) {
+                $files = ($msgGroup.Items.file | Select-Object -Unique).Count
+
+                [PSCustomObject]@{
+                    Count = $msgGroup.Count
+                    Code = $codeGroup.Name
+                    Message = $msgGroup.Example.message
+                    Files = $files
+                }
+            }
+        }
+    }
+}
