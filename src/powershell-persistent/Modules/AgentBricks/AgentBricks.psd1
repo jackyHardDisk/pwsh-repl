@@ -32,6 +32,8 @@
         'Format-Count',
         'Group-By',
         'Measure-Frequency',
+        'Group-Similar',
+        'Group-BuildErrors',
         # Extract
         'Extract-Regex',
         'Extract-Between',
@@ -43,6 +45,8 @@
         # Present
         'Show',
         'Export-ToFile',
+        'Get-StreamData',
+        'Show-StreamSummary',
         # Meta - Discovery
         'Find-ProjectTools',
         # Meta - Learning
@@ -56,6 +60,20 @@
         'Get-BrickStore',
         'Export-Environment',
         'Clear-Stored',
+        'Set-EnvironmentTee',
+        # DevRun Cache
+        'Initialize-DevRunCache',
+        'Get-CachedStreamData',
+        'Clear-DevRunCache',
+        'Get-DevRunCacheStats',
+        # DevRun Script Registry
+        'Add-DevScript',
+        'Get-DevScripts',
+        'Remove-DevScript',
+        'Update-DevScriptMetadata',
+        # DevRun Script Invocation
+        'Invoke-DevScript',
+        'Invoke-DevScriptChain',
         # Utility
         'Invoke-WithTimeout',
         'Invoke-PythonScript'
@@ -85,14 +103,18 @@
             # ReleaseNotes of this module
             ReleaseNotes = @'
 0.1.0 - Initial POC Release
-- Core transformation functions (Format-Count, Group-By, Measure-Frequency)
+- Core transformation functions (Format-Count, Group-By, Measure-Frequency, Group-Similar, Group-BuildErrors)
+- Fuzzy grouping with Jaro-Winkler distance for error clustering
 - Data extraction (Extract-Regex, Extract-Between, Extract-Column)
 - Analysis functions (Find-Errors, Find-Warnings, Parse-BuildOutput)
-- Presentation functions (Show, Export-ToFile)
+- Presentation functions (Show, Export-ToFile, Get-StreamData, Show-StreamSummary)
+- dev_run stream integration (retrieve and format Error, Warning, Output, Verbose, Debug, Information)
 - Meta-learning (Learn-OutputPattern, Test-Pattern, Set-Pattern, Get-Patterns)
 - Project discovery (Find-ProjectTools)
-- Pre-configured patterns for JS/TS, Python, .NET, and build tools
-- State management (Save-Project, Load-Project, Get-BrickStore)
+- Pre-configured patterns for JS/TS, Python, .NET, and build tools (40+)
+- State management (Save-Project, Load-Project, Get-BrickStore, Export-Environment, Clear-Stored, Set-EnvironmentTee)
+- Pipeline tee functionality for capture-and-pass-through workflows
+- Utility functions (Invoke-WithTimeout, Invoke-PythonScript)
 '@
         }
     }

@@ -105,7 +105,7 @@ public class PwshTool
         }
 
         // Append errors if any
-        if (pwsh.HadErrors)
+        if (pwsh.Streams.Error.Count > 0)
         {
             output.AppendLine("\nErrors:");
             foreach (var error in pwsh.Streams.Error)

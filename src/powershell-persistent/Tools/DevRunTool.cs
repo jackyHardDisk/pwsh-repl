@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Management.Automation;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Text.Json;
 using ModelContextProtocol.Server;
 using PowerShellMcpServer.Core;
 using System.Linq;
@@ -10,8 +11,8 @@ namespace PowerShellMcpServer.Tools;
 
 /// <summary>
 /// MCP tool for iterative development workflows with output capture and analysis.
-/// Executes scripts, captures stdout/stderr separately, stores in session variables,
-/// and returns condensed summary with error/warning counts.
+/// Executes scripts, captures all PowerShell streams, stores in JSON hashtable,
+/// and returns configurable summary with stream frequency analysis.
 /// </summary>
 [McpServerToolType]
 public class DevRunTool
@@ -24,14 +25,15 @@ public class DevRunTool
     }
 
     [McpServerTool]
-    [Description("Iterative development wrapper with output capture. Runs script, stores stdout/stderr in session variables, and returns condensed summary with error/warning counts.")]
+    [Description("Iterative development wrapper with output capture. Runs script, stores all streams in JSON hashtable, and returns configurable summary with stream analysis.")]
     public string DevRun(
         [Description("PowerShell script to execute (optional if name is provided for re-run)")] string? script = null,
-        [Description("Name for stored results (creates $env:name_stdout, $env:name_stderr, $env:name)")] string? name = null,
+        [Description("Name for stored results (creates $env:name_streams JSON hashtable, $env:name_output, $env:name)")] string? name = null,
         [Description("Session ID (default: 'default')")] string sessionId = "default",
         [Description("Virtual environment path or conda environment name (optional). Activates the environment before script execution.")] string? environment = null,
         [Description("Initial session state: 'default' (standard cmdlets + current env) or 'create' (minimal blank slate). Default: 'default'")] string initialSessionState = "default",
-        [Description("Timeout in seconds (default: 60). Script execution will be terminated if it exceeds this duration.")] int timeoutSeconds = 60)
+        [Description("Timeout in seconds (default: 60). Script execution will be terminated if it exceeds this duration.")] int timeoutSeconds = 60,
+        [Description("Streams to show in summary: Error, Warning, Verbose, Debug, Information, Output. Default: Error, Warning")] string[]? streams = null)
     {
         var session = _sessionManager.GetOrCreateSession(sessionId, environment, initialSessionState);
 
@@ -67,10 +69,10 @@ public class DevRunTool
             // Sanitize name for use as environment variable (replace invalid chars with underscore)
             var safeName = System.Text.RegularExpressions.Regex.Replace(name, @"[^a-zA-Z0-9_]", "_");
 
-            // Environment activation is now handled by SessionManager on session creation
-            // No need to activate here
+            // Default streams to Error + Warning if not specified
+            var requestedStreams = streams ?? new[] { "Error", "Warning" };
 
-            // Execute script directly (no redirection) to preserve formatted objects with timeout
+            // Execute script with timeout
             session.PowerShell.AddScript(script);
 
             var invokeTask = Task.Run(() => session.PowerShell.Invoke());
@@ -89,28 +91,59 @@ public class DevRunTool
                        $"The script was terminated. Consider increasing the timeout parameter or optimizing the script.";
             }
 
-            var exitCode = session.PowerShell.HadErrors ? 1 : 0;
+            // Capture output stream (with format object handling)
+            var outputLines = FormatOutputStream(results);
 
-            // Capture all output using the same pattern as PwshTool
-            var formattedOutput = FormatAllStreams(results, session.PowerShell);
+            // Capture all six PowerShell streams
+            var streamData = new Dictionary<string, List<string>>
+            {
+                ["Error"] = session.PowerShell.Streams.Error.Select(e => e.ToString()).ToList(),
+                ["Warning"] = session.PowerShell.Streams.Warning.Select(w => w.ToString()).ToList(),
+                ["Verbose"] = session.PowerShell.Streams.Verbose.Select(v => v.ToString()).ToList(),
+                ["Debug"] = session.PowerShell.Streams.Debug.Select(d => d.ToString()).ToList(),
+                ["Information"] = session.PowerShell.Streams.Information.Select(i => i.ToString()).ToList(),
+                ["Output"] = outputLines
+            };
 
-            // Store formatted output and script in environment variables for re-run capability
+            // Serialize to JSON for $env:name_streams
+            var streamJson = JsonSerializer.Serialize(streamData, new JsonSerializerOptions
+            {
+                WriteIndented = false
+            });
+
+            // Format all streams for backwards-compatible $env:name_output display
+            var formattedOutput = FormatAllStreams(outputLines, session.PowerShell);
+
+            // Store in environment variables
             var storeScript = $@"
+$env:{safeName}_streams = @'
+{streamJson.Replace("'", "''")}
+'@
 $env:{safeName}_output = @'
 {formattedOutput.Replace("'", "''")}
 '@
 $env:{safeName} = @'
-{script.Replace("'", "''")}
+{script}
 '@
 $env:{safeName}_timestamp = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+
+# Invalidate cache for this script (if AgentBricks module is loaded)
+if (Get-Command Clear-DevRunCache -ErrorAction SilentlyContinue) {{
+    Clear-DevRunCache -Name '{safeName}' -ErrorAction SilentlyContinue
+}}
+
+# Register script metadata in global registry (if AgentBricks module is loaded)
+if (Get-Command Add-DevScript -ErrorAction SilentlyContinue) {{
+    Add-DevScript -Name '{safeName}' -Script $env:{safeName} -ExitCode $LASTEXITCODE -ErrorAction SilentlyContinue
+}}
 ";
             session.PowerShell.Commands.Clear();
             session.PowerShell.Streams.ClearStreams();
             session.PowerShell.AddScript(storeScript);
             session.PowerShell.Invoke();
 
-            // Generate summary
-            return GenerateSummary(script, safeName, formattedOutput, exitCode);
+            // Generate summary for requested streams
+            return GenerateSummary(script, safeName, requestedStreams, streamData);
         }
         catch (Exception ex)
         {
@@ -124,14 +157,13 @@ $env:{safeName}_timestamp = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
     }
 
     /// <summary>
-    /// Formats all PowerShell streams (output + errors + warnings + verbose + debug + information)
-    /// using the same pattern as PwshTool. Handles formatted objects properly.
+    /// Formats output stream, handling format objects properly.
+    /// Returns list of output lines for JSON storage.
     /// </summary>
-    private static string FormatAllStreams(ICollection<PSObject> results, PowerShell pwsh)
+    private static List<string> FormatOutputStream(ICollection<PSObject> results)
     {
-        var output = new StringBuilder();
+        var lines = new List<string>();
 
-        // Process output stream (may contain format objects)
         if (results.Count > 0)
         {
             var formatBuffer = new List<PSObject>();
@@ -146,31 +178,51 @@ $env:{safeName}_timestamp = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
                 {
                     if (formatBuffer.Count > 0)
                     {
-                        output.Append(RenderFormatObjects(formatBuffer));
+                        var rendered = RenderFormatObjects(formatBuffer);
+                        lines.AddRange(rendered.Split('\n', StringSplitOptions.RemoveEmptyEntries));
                         formatBuffer.Clear();
                     }
 
                     if (result?.BaseObject is string str)
-                        output.AppendLine(str);
+                        lines.Add(str);
                     else
-                        output.AppendLine(result?.ToString() ?? "(null)");
+                        lines.Add(result?.ToString() ?? "(null)");
                 }
             }
 
             if (formatBuffer.Count > 0)
             {
-                output.Append(RenderFormatObjects(formatBuffer));
+                var rendered = RenderFormatObjects(formatBuffer);
+                lines.AddRange(rendered.Split('\n', StringSplitOptions.RemoveEmptyEntries));
             }
         }
 
-        // Append all six streams
-        if (pwsh.HadErrors)
+        return lines;
+    }
+
+    /// <summary>
+    /// Formats all streams for display (backwards-compatible format).
+    /// </summary>
+    private static string FormatAllStreams(List<string> outputLines, PowerShell pwsh)
+    {
+        var output = new StringBuilder();
+
+        // Output stream
+        if (outputLines.Count > 0)
+        {
+            foreach (var line in outputLines)
+                output.AppendLine(line);
+        }
+
+        // Error stream
+        if (pwsh.Streams.Error.Count > 0)
         {
             output.AppendLine("\nErrors:");
             foreach (var error in pwsh.Streams.Error)
                 output.AppendLine($"  {error}");
         }
 
+        // Warning stream
         if (pwsh.Streams.Warning.Count > 0)
         {
             output.AppendLine("\nWarnings:");
@@ -178,6 +230,7 @@ $env:{safeName}_timestamp = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
                 output.AppendLine($"  {warning}");
         }
 
+        // Verbose stream
         if (pwsh.Streams.Verbose.Count > 0)
         {
             output.AppendLine("\nVerbose:");
@@ -185,6 +238,7 @@ $env:{safeName}_timestamp = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
                 output.AppendLine($"  {verbose}");
         }
 
+        // Debug stream
         if (pwsh.Streams.Debug.Count > 0)
         {
             output.AppendLine("\nDebug:");
@@ -192,6 +246,7 @@ $env:{safeName}_timestamp = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
                 output.AppendLine($"  {debug}");
         }
 
+        // Information stream
         if (pwsh.Streams.Information.Count > 0)
         {
             output.AppendLine("\nInformation:");
@@ -233,75 +288,53 @@ $env:{safeName}_timestamp = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
         }
     }
 
-    private static string GenerateSummary(string script, string name, string fullOutput, int exitCode)
+    private static string GenerateSummary(string script, string name, string[] requestedStreams, Dictionary<string, List<string>> streamData)
     {
         var summary = new StringBuilder();
 
         // Script info
         var displayScript = script.Length > 50 ? script.Substring(0, 47) + "..." : script;
         summary.AppendLine($"Script: {displayScript}");
-        summary.AppendLine($"Exit Code: {exitCode}");
         summary.AppendLine();
 
-        // Analyze output for errors/warnings
-        var lines = fullOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        // Show requested streams
+        foreach (var streamName in requestedStreams)
+        {
+            if (!streamData.ContainsKey(streamName)) continue;
 
-        // Extract errors (case-insensitive patterns)
-        var errorPattern = new Regex(@"\b(error|exception|failed|failure)\b", RegexOptions.IgnoreCase);
-        var errors = lines.Where(line => errorPattern.IsMatch(line)).ToList();
-        var uniqueErrors = errors.GroupBy(e => e.Trim())
-                                .OrderByDescending(g => g.Count())
-                                .Take(5)
-                                .ToList();
+            var items = streamData[streamName];
+            if (items.Count == 0) continue;
 
-        // Extract warnings
-        var warningPattern = new Regex(@"\bwarning\b", RegexOptions.IgnoreCase);
-        var warnings = lines.Where(line => warningPattern.IsMatch(line)).ToList();
-        var uniqueWarnings = warnings.GroupBy(w => w.Trim())
-                                    .OrderByDescending(g => g.Count())
-                                    .Take(5)
-                                    .ToList();
+            var unique = items.Distinct().Count();
+            summary.AppendLine($"{streamName}s: {items.Count,6}  ({unique} unique)");
 
-        // Summary statistics
-        var totalLines = fullOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length;
-        summary.AppendLine($"Errors:   {errors.Count,3}  ({uniqueErrors.Count} unique)");
-        summary.AppendLine($"Warnings: {warnings.Count,3}  ({uniqueWarnings.Count} unique)");
-        summary.AppendLine($"Output:   {totalLines,3} lines");
+            // Frequency analysis (top 5)
+            var frequency = items
+                .GroupBy(x => x)
+                .Select(g => new { Count = g.Count(), Item = g.Key })
+                .OrderByDescending(x => x.Count)
+                .Take(5)
+                .ToList();
+
+            if (frequency.Any())
+            {
+                summary.AppendLine($"\nTop {streamName}s:");
+                foreach (var f in frequency)
+                {
+                    var message = f.Item.Length > 80 ? f.Item.Substring(0, 77) + "..." : f.Item;
+                    summary.AppendLine($"    {f.Count,2}x: {message}");
+                }
+                summary.AppendLine();
+            }
+        }
+
+        // Output line count (always show)
+        var outputCount = streamData["Output"].Count;
+        summary.AppendLine($"Output: {outputCount,6} lines");
         summary.AppendLine();
-
-        // Top errors
-        if (uniqueErrors.Any())
-        {
-            summary.AppendLine("Top Errors:");
-            foreach (var errorGroup in uniqueErrors)
-            {
-                var count = errorGroup.Count();
-                var message = errorGroup.Key.Trim();
-                // Truncate long messages
-                if (message.Length > 80)
-                    message = message.Substring(0, 77) + "...";
-                summary.AppendLine($"    {count,2}x: {message}");
-            }
-            summary.AppendLine();
-        }
-
-        // Top warnings
-        if (uniqueWarnings.Any())
-        {
-            summary.AppendLine("Top Warnings:");
-            foreach (var warningGroup in uniqueWarnings)
-            {
-                var count = warningGroup.Count();
-                var message = warningGroup.Key.Trim();
-                if (message.Length > 80)
-                    message = message.Substring(0, 77) + "...";
-                summary.AppendLine($"    {count,2}x: {message}");
-            }
-            summary.AppendLine();
-        }
 
         // Storage info
-        summary.AppendLine($"Stored: $env:{name}_output (formatted with all streams)");
+        summary.AppendLine($"Stored: $env:{name}_streams (JSON), $env:{name}_output (text)");
         summary.AppendLine($"Re-run: dev-run(name=\"{name}\")");
 
         return summary.ToString().TrimEnd();
