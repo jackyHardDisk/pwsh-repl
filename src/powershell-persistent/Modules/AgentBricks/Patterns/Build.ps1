@@ -78,3 +78,9 @@ Set-Pattern -Name "Go-Error" `
     -Pattern '(?<file>[\w/\\.-]+):(?<line>\d+):(?<col>\d+):\s*(?<message>.+)' `
     -Description "Go compiler errors: file:line:col: message" `
     -Category "error"
+
+# Docker Build Errors
+Set-Pattern -Name "Docker" `
+    -Pattern 'ERROR\s+\[(?<stage>[\w\s]+)\s*\d*/\d*\]\s*(?<message>.+)' `
+    -Description "Docker build errors: ERROR [stage] message" `
+    -Category "error"

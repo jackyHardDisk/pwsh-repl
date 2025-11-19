@@ -175,7 +175,7 @@ $grouped = @{
     State = @('Save-Project', 'Load-Project', 'Get-BrickStore', 'Export-Environment', 'Clear-Stored', 'Set-EnvironmentTee')
     DevRunCache = @('Initialize-DevRunCache', 'Get-CachedStreamData', 'Clear-DevRunCache', 'Get-DevRunCacheStats')
     Script = @('Add-DevScript', 'Get-DevScripts', 'Remove-DevScript', 'Update-DevScriptMetadata', 'Invoke-DevScript', 'Invoke-DevScriptChain')
-    Utility = @('Invoke-WithTimeout', 'Invoke-PythonScript')
+    Utility = @('Invoke-WithTimeout')
 }
 
 $output = @('AgentBricks Functions:')
@@ -185,6 +185,25 @@ foreach ($category in $grouped.Keys | Sort-Object) {
         $output += ""  $category`: $($funcs -join ', ')""
     }
 }
+
+$output += """"
+$output += ""Pre-configured Patterns (48):""
+$output += ""  JavaScript/TypeScript (9): ESLint, TypeScript, Jest, Vite, Webpack, Prettier, Stylelint, Node.js, Biome""
+$output += ""  Python (10): Pytest, Mypy, Flake8, Pylint, Black, Ruff, Traceback, Exception, Unittest, Coverage""
+$output += ""  .NET (10): MSBuild-Error, MSBuild-Warning, NuGet, NUnit, xUnit, MSTest, Exception, Roslyn, StyleCop, SDK""
+$output += ""  Build (14): GCC-Error/Warning, Clang, CMake-Error/Warning, Make, Linker, Ninja, Maven, Gradle, Rustc, Cargo, Go, Docker""
+$output += ""  PowerShell (1): PowerShell-Error""
+$output += ""  Git (3): Git-Status, Git-Conflict, Git-MergeConflict""
+$output += ""  CI/CD (1): GitHub-Actions""
+
+$output += """"
+$output += ""Quick Examples:""
+$output += ""  dev_run 'npm test' 'test' | Find-Errors | Group-Similar | Format-Count""
+$output += ""  dev_run 'dotnet build' 'build' -environment myenv | Parse-BuildOutput MSBuild-Error""
+$output += ""  'git status' | pwsh | Extract-Regex Git-Status | Group-By status""
+$output += ""  dev_run 'pytest' 'test'; Get-StreamData 'test' stderr | Find-Warnings | Measure-Frequency""
+$output += ""  'docker build .' | pwsh | Find-Errors | Export-ToFile errors.txt""
+
 $output -join ""`n""
 ";
             pwsh.AddScript(script);

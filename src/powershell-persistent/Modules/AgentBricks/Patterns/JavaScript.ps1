@@ -48,3 +48,9 @@ Set-Pattern -Name "NodeStackTrace" `
     -Pattern 'at\s+(?<function>[\w.<>]+)\s+\((?<file>[\w/\\.-]+):(?<line>\d+):(?<col>\d+)\)' `
     -Description "Node.js stack trace format" `
     -Category "error"
+
+# Biome - Modern linter/formatter for JS/TS/JSON
+Set-Pattern -Name "Biome" `
+    -Pattern '(?<file>[\w/\\.-]+):(?<line>\d+):(?<col>\d+)\s+(?<severity>lint/\w+|parse)\s+(?<code>\w+/\w+)\s+(?<message>.+)' `
+    -Description "Biome: file:line:col severity code message" `
+    -Category "lint"

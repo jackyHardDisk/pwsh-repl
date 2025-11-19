@@ -7,12 +7,6 @@ Set-Pattern -Name "Pytest-Fail" `
     -Description "Pytest test failures: FAILED test - reason" `
     -Category "test"
 
-# Pytest - Test passes (for completeness)
-Set-Pattern -Name "Pytest-Pass" `
-    -Pattern 'PASSED\s+(?<test>[\w/:.-]+)' `
-    -Description "Pytest test passes" `
-    -Category "test"
-
 # Python Traceback - File location
 Set-Pattern -Name "PythonTraceback" `
     -Pattern 'File "(?<file>[\w/\\.-]+)",\s+line\s+(?<line>\d+),\s+in\s+(?<function>\w+)' `
@@ -60,3 +54,9 @@ Set-Pattern -Name "Coverage" `
     -Pattern '(?<file>[\w/\\.-]+)\s+(?<statements>\d+)\s+(?<missing>\d+)\s+(?<coverage>\d+)%' `
     -Description "Coverage report line: file statements missing coverage%" `
     -Category "info"
+
+# Ruff - Modern Python linter
+Set-Pattern -Name "Ruff" `
+    -Pattern '(?<file>[\w/\\.-]+):(?<line>\d+):(?<col>\d+):\s*(?<code>[A-Z]+\d+)\s+(?<message>.+)' `
+    -Description "Ruff: file:line:col: code message" `
+    -Category "lint"

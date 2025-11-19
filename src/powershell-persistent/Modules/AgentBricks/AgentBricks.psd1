@@ -75,8 +75,7 @@
         'Invoke-DevScript',
         'Invoke-DevScriptChain',
         # Utility
-        'Invoke-WithTimeout',
-        'Invoke-PythonScript'
+        'Invoke-WithTimeout'
     )
 
     # Cmdlets to export from this module
@@ -114,7 +113,7 @@
 - Pre-configured patterns for JS/TS, Python, .NET, and build tools (40+)
 - State management (Save-Project, Load-Project, Get-BrickStore, Export-Environment, Clear-Stored, Set-EnvironmentTee)
 - Pipeline tee functionality for capture-and-pass-through workflows
-- Utility functions (Invoke-WithTimeout, Invoke-PythonScript)
+- Utility functions (Invoke-WithTimeout)
 '@
         }
     }
