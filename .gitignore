@@ -40,3 +40,5 @@ Thumbs.db
 #deprecated 
 archive/
 *deprecated*
+# Test output with environment variables
+test/output/

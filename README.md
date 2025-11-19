@@ -45,7 +45,7 @@ Add to `.mcp.json` (project-level) or `~/.claude/settings.json` (user-level):
 {
   "mcpServers": {
     "powershell-persistent": {
-      "command": "C:\\Users\\yourname\\source\\repos\\homebrew-mcp\\bin\\Debug\\net8.0-windows\\win-x64\\PowerShellMcpServer.exe"
+      "command": "C:\\Users\\yourname\\source\\repos\\pwsh-repl\\bin\\Debug\\net8.0-windows\\win-x64\\PowerShellMcpServer.exe"
     }
   }
 }
@@ -325,7 +325,7 @@ pwsh("Save-Project -Path '.brickyard.json'")
 
 ```bash
 git clone <repository-url>
-cd homebrew-mcp
+cd pwsh-repl
 dotnet restore
 dotnet build
 ```
