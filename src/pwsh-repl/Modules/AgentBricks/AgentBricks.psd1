@@ -12,13 +12,13 @@
     GUID = 'a228fd8f-82d1-43c1-9143-555876e72e58'
 
     # Author of this module
-    Author = 'homebrew-mcp'
+    Author = 'pwsh-repl'
 
     # Company or vendor of this module
-    CompanyName = 'homebrew-mcp'
+    CompanyName = 'pwsh-repl'
 
     # Copyright statement for this module
-    Copyright = '(c) 2024 homebrew-mcp. All rights reserved.'
+    Copyright = '(c) 2024 pwsh-repl. All rights reserved.'
 
     # Description of the functionality provided by this module
     Description = 'Self-teaching development toolkit for agent-driven PowerShell workflows. Provides composable functions for parsing build output, extracting errors, learning tool patterns, and analyzing development tool output. Designed for AI agents to discover and use via PowerShell help system.'
@@ -35,13 +35,13 @@
         'Group-Similar',
         'Group-BuildErrors',
         # Extract
-        'Extract-Regex',
-        'Extract-Between',
-        'Extract-Column',
+        'Select-RegexMatch',
+        'Select-TextBetween',
+        'Select-Column',
         # Analyze
         'Find-Errors',
         'Find-Warnings',
-        'Parse-BuildOutput',
+        'Get-BuildError',
         # Present
         'Show',
         'Export-ToFile',
@@ -53,14 +53,15 @@
         'Set-Pattern',
         'Get-Patterns',
         'Test-Pattern',
-        'Learn-OutputPattern',
+        'Register-OutputPattern',
         # State
         'Save-Project',
-        'Load-Project',
+        'Import-Project',
         'Get-BrickStore',
         'Export-Environment',
         'Clear-Stored',
         'Set-EnvironmentTee',
+        'Invoke-CapturedProcess',
         # DevRun Cache
         'Initialize-DevRunCache',
         'Get-CachedStreamData',
@@ -104,14 +105,15 @@
 0.1.0 - Initial POC Release
 - Core transformation functions (Format-Count, Group-By, Measure-Frequency, Group-Similar, Group-BuildErrors)
 - Fuzzy grouping with Jaro-Winkler distance for error clustering
-- Data extraction (Extract-Regex, Extract-Between, Extract-Column)
-- Analysis functions (Find-Errors, Find-Warnings, Parse-BuildOutput)
+- Data extraction (Select-RegexMatch, Select-TextBetween, Select-Column)
+- Analysis functions (Find-Errors, Find-Warnings, Get-BuildError)
 - Presentation functions (Show, Export-ToFile, Get-StreamData, Show-StreamSummary)
 - dev_run stream integration (retrieve and format Error, Warning, Output, Verbose, Debug, Information)
-- Meta-learning (Learn-OutputPattern, Test-Pattern, Set-Pattern, Get-Patterns)
+- Meta-learning (Register-OutputPattern, Test-Pattern, Set-Pattern, Get-Patterns)
 - Project discovery (Find-ProjectTools)
 - Pre-configured patterns for JS/TS, Python, .NET, and build tools (40+)
-- State management (Save-Project, Load-Project, Get-BrickStore, Export-Environment, Clear-Stored, Set-EnvironmentTee)
+- State management (Save-Project, Import-Project, Get-BrickStore, Export-Environment, Clear-Stored, Set-EnvironmentTee)
+- Process execution with I/O capture (Invoke-CapturedProcess)
 - Pipeline tee functionality for capture-and-pass-through workflows
 - Utility functions (Invoke-WithTimeout)
 '@

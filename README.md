@@ -1,30 +1,45 @@
 # PowerShell Persistent MCP Server
 
-Model Context Protocol (MCP) server providing persistent PowerShell execution for Claude Code with auto-loading AgentBricks module.
+Model Context Protocol (MCP) server providing persistent PowerShell execution for Claude
+Code with auto-loading AgentBricks module.
 
 **Status:** Implementation Complete | Testing In Progress
 
 ## Features
 
 **Persistent Sessions**
+
 - Named PowerShell sessions with variable persistence
 - Session state survives across tool calls
 - Multiple independent sessions per MCP server instance
 
-**3 MCP Tools**
+**4 MCP Tools**
+
 - `test` - Simple connectivity test
+- `stdin` - Write to session-specific stdin pipes
 - `pwsh` - Execute PowerShell with session persistence
 - `dev_run` - Iterative development workflow with output capture and summarization
 
 **AgentBricks Module**
+
 - 20 PowerShell functions (Transform, Extract, Analyze, Present, Meta-Learning, State)
 - 40+ pre-configured patterns for common tools (JavaScript, Python, .NET, Build)
 - Auto-loads on session creation
 - Token-efficient (0 tokens upfront, discovered via Get-Help)
 
+**LoraxMod Module**
+
+- Tree-sitter AST parsing and analysis via PowerShell
+- 8 functions (Interactive REPL, Query, Find, Navigate, Export)
+- 12 supported languages (C, C++, C#, Python, JavaScript, TypeScript, Bash, PowerShell, R, Rust, CSS, Fortran)
+- Requires Node.js (optional peer dependency)
+- Bundled with tree-sitter grammars
+
 **Token Efficiency**
-- Tool schemas: ~1,400 tokens (3 tools only)
+
+- Tool schemas: ~1,900 tokens (4 tools)
 - AgentBricks functions: 0 tokens upfront (discovered on-demand)
+- LoraxMod functions: 0 tokens upfront (discovered on-demand)
 - dev_run summaries: 99% reduction vs raw output
 
 ## Quick Start
@@ -44,7 +59,7 @@ Add to `.mcp.json` (project-level) or `~/.claude/settings.json` (user-level):
 ```json
 {
   "mcpServers": {
-    "powershell-persistent": {
+    "pwsh-repl": {
       "command": "C:\\Users\\yourname\\source\\repos\\pwsh-repl\\bin\\Debug\\net8.0-windows\\win-x64\\PowerShellMcpServer.exe"
     }
   }
@@ -68,9 +83,11 @@ test("Claude")
 **Purpose:** Verify MCP connection
 
 **Parameters:**
+
 - `name` (optional, default: "World") - Name to greet
 
 **Example:**
+
 ```powershell
 test("Agent")
 # Returns: Hello, Agent!
@@ -81,15 +98,18 @@ test("Agent")
 **Purpose:** Execute PowerShell scripts with persistent state
 
 **Parameters:**
+
 - `script` (required) - PowerShell script to execute
 - `sessionId` (optional, default: "default") - Session ID for state isolation
 
 **Features:**
+
 - Variables persist within session
 - Automatic Out-String formatting for tables
 - Returns stdout + errors + warnings
 
 **Example:**
+
 ```powershell
 # Set variable
 pwsh("$myVar = 42", "session1")
@@ -108,15 +128,19 @@ pwsh("Get-Process | Where-Object { $_.CPU -gt 100 } | Select-Object -First 5", "
 
 ### dev_run - Iterative Development Wrapper
 
-**Purpose:** Execute scripts with output capture, store in session variables, return condensed summaries
+**Purpose:** Execute scripts with output capture, store in session variables, return
+condensed summaries
 
 **Parameters:**
+
 - `script` (required for first run, optional for re-run) - PowerShell script to execute
-- `name` (optional) - Name for stored results (generates timestamp-based name if omitted)
+- `name` (optional) - Name for stored results (generates timestamp-based name if
+  omitted)
 - `sessionId` (optional, default: "default") - Session ID
 - `environment` (optional) - Conda/venv environment to activate
 
 **Stores:**
+
 - `$env:{name}_stdout` - Standard output
 - `$env:{name}_stderr` - Error output
 - `$env:{name}` - Original script (re-run capability)
@@ -125,6 +149,7 @@ pwsh("Get-Process | Where-Object { $_.CPU -gt 100 } | Select-Object -First 5", "
 **Returns:** Condensed summary with error/warning counts, top issues, output line count
 
 **Example:**
+
 ```powershell
 # Run build
 dev_run("dotnet build", "build")
@@ -161,6 +186,7 @@ dev_run(name="build")
 **Auto-loads on session creation.** Functions available immediately without import.
 
 **Quick reference:**
+
 ```powershell
 Get-BrickStore        # View loaded patterns and state
 Find-ProjectTools     # Discover available build/test/lint tools
@@ -169,6 +195,7 @@ Get-Help <function>   # Full documentation for any function
 ```
 
 **Function categories:**
+
 - Transform: Format-Count, Group-By, Measure-Frequency
 - Extract: Extract-Regex, Extract-Between, Extract-Column
 - Analyze: Find-Errors, Find-Warnings, Parse-BuildOutput
@@ -177,9 +204,11 @@ Get-Help <function>   # Full documentation for any function
 - Meta-Learning: Set-Pattern, Get-Patterns, Test-Pattern, Learn-OutputPattern
 - State: Save-Project, Load-Project, Get-BrickStore, Clear-Stored
 
-**Pre-configured patterns:** ESLint, TypeScript, Pytest, Mypy, MSBuild, NuGet, GCC, Clang, CMake, and 30+ more.
+**Pre-configured patterns:** ESLint, TypeScript, Pytest, Mypy, MSBuild, NuGet, GCC,
+Clang, CMake, and 30+ more.
 
 **Usage example:**
+
 ```powershell
 # Run tests with dev_run
 dev_run("pytest tests/", "test")
@@ -198,16 +227,22 @@ pwsh('$env:test_stderr | Extract-Regex -Pattern (Get-Patterns -Name "Pytest-Fail
 ## Documentation
 
 **Technical Details:**
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Implementation details, build process, session management
-- [AGENTBRICKS.md](docs/AGENTBRICKS.md) - Complete AgentBricks function reference with examples
-- [DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md) - Why key architectural choices were made
+
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Implementation details, build process,
+  session management
+- [AGENTBRICKS.md](docs/AGENTBRICKS.md) - Complete AgentBricks function reference with
+  examples
+- [DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md) - Why key architectural choices were
+  made
 
 **Roadmap:**
+
 - [TODO.md](docs/TODO.md) - Prioritized next steps and future enhancements
 
 ## Current Status
 
 **Completed:**
+
 - Core MCP server with stdio protocol
 - 3 tools: test, pwsh, dev_run
 - SessionManager with named sessions
@@ -217,6 +252,7 @@ pwsh('$env:test_stderr | Extract-Regex -Pattern (Get-Patterns -Name "Pytest-Fail
 - Build targets for module copying
 
 **Testing In Progress:**
+
 - Manual testing with real projects
 - Integration test suite
 - User acceptance scenarios
@@ -235,6 +271,7 @@ pwsh('$env:test_stderr | Extract-Regex -Pattern (Get-Patterns -Name "Pytest-Fail
 6. **User Acceptance Scenarios** - Real-world workflows
 
 **Longer-term goals:**
+
 - Wrapper servers (token optimization for downstream MCP servers)
 - Filter servers (schema filtering, demonstrated in mcp-filter project)
 - Multi-project MCP server collection
@@ -242,22 +279,26 @@ pwsh('$env:test_stderr | Extract-Regex -Pattern (Get-Patterns -Name "Pytest-Fail
 ## Architecture Highlights
 
 **Channel-Based Pool Pattern:**
+
 - Async-friendly (no locks)
 - Based on PowerAuger's BackgroundProcessor
 - 5 PowerShell instances, unbound channel
 
 **Named Session Management:**
+
 - ConcurrentDictionary for thread-safe access
 - Each session has dedicated Runspace
 - Variables persist across calls within session
 
 **Token Efficiency Strategy:**
+
 - Module functions NOT in MCP tool schemas
 - Agents discover via `Get-Command -Module AgentBricks`
 - Full help via `Get-Help <function> -Full`
 - 90% token reduction vs exposing 20+ tools
 
 **Hybrid v1+v2+v3 Pattern:**
+
 - v1: Concrete functions (immediate utility)
 - v2: Pre-configured patterns (common tools)
 - v3: Meta-learning (teach new tools)
@@ -331,6 +372,7 @@ dotnet build
 ```
 
 Build output includes:
+
 - PowerShellMcpServer.exe
 - PowerShell SDK runtime libraries (auto-copied)
 - AgentBricks module (auto-copied to Modules/)
@@ -338,6 +380,7 @@ Build output includes:
 ## Contributing
 
 This is a custom MCP server for personal/organizational use. Contributions welcome for:
+
 - Additional AgentBricks patterns
 - Performance optimizations
 - Bug fixes
