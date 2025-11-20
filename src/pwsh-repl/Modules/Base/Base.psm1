@@ -15,7 +15,7 @@
     - Session management helpers
 
 .NOTES
-    Author: homebrew-mcp
+    Author: pwsh-repl
     Version: 0.1.0
     This module auto-loads with PowerShell MCP Server sessions.
 #>

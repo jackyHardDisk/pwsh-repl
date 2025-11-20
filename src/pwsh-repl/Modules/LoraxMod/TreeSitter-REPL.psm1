@@ -11,6 +11,10 @@ Requires Node.js (optional peer dependency)
 loraxmod bundled in module directory
 #>
 
+# Store module root at load time (works in background sessions)
+$script:ModuleRoot = $PSScriptRoot
+$script:LoraxPath = "$script:ModuleRoot/loraxmod/lib/index.js" -replace '\\', '/'
+
 function Start-TreeSitterSession {
     <#
     .SYNOPSIS
@@ -72,9 +76,12 @@ function Start-TreeSitterSession {
     # Escape code for JavaScript string
     $escapedCode = $Code -replace '\\', '\\' -replace '"', '\"' -replace "`n", '\n' -replace "`r", '\r'
 
+    # Get lorax path from module scope
+    $loraxPath = $script:LoraxPath
+
     # Generate initialization script
     $initScript = @"
-const lorax = require('./loraxmod/lib/index.js');
+const lorax = require('$loraxPath');
 
 console.log('Initializing tree-sitter...');
 (async () => {
@@ -143,9 +150,7 @@ console.log('Initializing tree-sitter...');
 
     try {
         # Start Node.js with init script
-        Push-Location (Join-Path $PSScriptRoot "..")
-        node $tempScript
-        Pop-Location
+        & node $tempScript
     } finally {
         # Cleanup
         if (Test-Path $tempScript) {
@@ -215,9 +220,12 @@ function Invoke-TreeSitterQuery {
     $escapedCode = $Code -replace '\\', '\\' -replace '"', '\"' -replace "`n", '\n' -replace "`r", '\r' -replace "`t", '\t'
     $escapedPattern = $Pattern -replace '\\', '\\' -replace '"', '\"' -replace "`n", '\n'
 
+    # Get lorax path from module scope
+    $loraxPath = $script:LoraxPath
+
     # Create query script
     $queryScript = @"
-const lorax = require('./loraxmod/lib/index.js');
+const lorax = require('$loraxPath');
 
 (async () => {
     await lorax.initParser();
@@ -265,9 +273,7 @@ const lorax = require('./loraxmod/lib/index.js');
 
     try {
         # Execute and capture output
-        Push-Location (Join-Path $PSScriptRoot "..")
-        $output = node $tempScript 2>&1
-        Pop-Location
+        $output = & node $tempScript
 
         # Parse JSON output
         $output | ConvertFrom-Json
@@ -351,8 +357,11 @@ function Find-FunctionCalls {
     $escapedCode = $Code -replace '\\', '\\' -replace '"', '\"' -replace "`n", '\n' -replace "`r", '\r'
     $filterJson = if ($FunctionNames) { ConvertTo-Json $FunctionNames -Compress } else { 'null' }
 
+    # Get lorax path from module scope
+    $loraxPath = $script:LoraxPath
+
     $analysisScript = @"
-const lorax = require('./loraxmod/lib/index.js');
+const lorax = require('$loraxPath');
 
 (async () => {
     await lorax.initParser();
@@ -437,9 +446,8 @@ const lorax = require('./loraxmod/lib/index.js');
     $analysisScript | Out-File -FilePath $tempScript -Encoding utf8 -NoNewline
 
     try {
-        Push-Location (Join-Path $PSScriptRoot "..")
-        $output = node $tempScript 2>&1
-        Pop-Location
+        # Use node directly - output goes to stdout naturally
+        $output = & node $tempScript
         $output | ConvertFrom-Json
     } finally {
         if (Test-Path $tempScript) { Remove-Item $tempScript -Force }
@@ -495,7 +503,7 @@ function Get-IncludeDependencies {
     $escapedCode = $Code -replace '\\', '\\' -replace '"', '\"' -replace "`n", '\n' -replace "`r", '\r'
 
     $includeScript = @"
-const lorax = require('./loraxmod/lib/index.js');
+const lorax = require('$loraxPath');
 
 (async () => {
     await lorax.initParser();
@@ -541,9 +549,7 @@ const lorax = require('./loraxmod/lib/index.js');
     $includeScript | Out-File -FilePath $tempScript -Encoding utf8 -NoNewline
 
     try {
-        Push-Location (Join-Path $PSScriptRoot "..")
-        $output = node $tempScript 2>&1
-        Pop-Location
+        $output = & node $tempScript
         $output | ConvertFrom-Json
     } finally {
         if (Test-Path $tempScript) { Remove-Item $tempScript -Force }
@@ -609,7 +615,7 @@ function Get-ASTNode {
     $escapedCode = $Code -replace '\\', '\\' -replace '"', '\"' -replace "`n", '\n' -replace "`r", '\r'
 
     $navScript = @"
-const lorax = require('./loraxmod/lib/index.js');
+const lorax = require('$loraxPath');
 
 (async () => {
     await lorax.initParser();
@@ -659,9 +665,7 @@ const lorax = require('./loraxmod/lib/index.js');
     $navScript | Out-File -FilePath $tempScript -Encoding utf8 -NoNewline
 
     try {
-        Push-Location (Join-Path $PSScriptRoot "..")
-        $output = node $tempScript 2>&1
-        Pop-Location
+        $output = & node $tempScript
         $output | ConvertFrom-Json
     } finally {
         if (Test-Path $tempScript) { Remove-Item $tempScript -Force }
@@ -737,7 +741,7 @@ function Show-ASTTree {
     $showTextFlag = if ($ShowText) { 'true' } else { 'false' }
 
     $treeScript = @"
-const lorax = require('./loraxmod/lib/index.js');
+const lorax = require('$loraxPath');
 
 (async () => {
     await lorax.initParser();
@@ -772,9 +776,7 @@ const lorax = require('./loraxmod/lib/index.js');
     $treeScript | Out-File -FilePath $tempScript -Encoding utf8 -NoNewline
 
     try {
-        Push-Location (Join-Path $PSScriptRoot "..")
-        node $tempScript
-        Pop-Location
+        & node $tempScript
     } finally {
         if (Test-Path $tempScript) { Remove-Item $tempScript -Force }
     }
@@ -852,7 +854,7 @@ function Export-ASTJson {
     $includeFieldsFlag = if ($IncludeFields) { 'true' } else { 'false' }
 
     $exportScript = @"
-const lorax = require('./loraxmod/lib/index.js');
+const lorax = require('$loraxPath');
 const fs = require('fs');
 
 (async () => {
@@ -919,9 +921,7 @@ const fs = require('fs');
     $exportScript | Out-File -FilePath $tempScript -Encoding utf8 -NoNewline
 
     try {
-        Push-Location (Join-Path $PSScriptRoot "..")
-        node $tempScript
-        Pop-Location
+        & node $tempScript
     } finally {
         if (Test-Path $tempScript) { Remove-Item $tempScript -Force }
     }
@@ -987,7 +987,7 @@ function Get-NodesByType {
     $typesJson = ConvertTo-Json $NodeType -Compress
 
     $filterScript = @"
-const lorax = require('./loraxmod/lib/index.js');
+const lorax = require('$loraxPath');
 
 (async () => {
     await lorax.initParser();
@@ -1028,9 +1028,7 @@ const lorax = require('./loraxmod/lib/index.js');
     $filterScript | Out-File -FilePath $tempScript -Encoding utf8 -NoNewline
 
     try {
-        Push-Location (Join-Path $PSScriptRoot "..")
-        $output = node $tempScript 2>&1
-        Pop-Location
+        $output = & node $tempScript
         $output | ConvertFrom-Json
     } finally {
         if (Test-Path $tempScript) { Remove-Item $tempScript -Force }

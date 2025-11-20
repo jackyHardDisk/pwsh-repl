@@ -2,14 +2,19 @@
 
 ## Overview
 
-AgentBricks is a self-teaching PowerShell module that provides concrete development tools, pre-configured patterns for common tools, and meta-learning capabilities for Claude agents. The module auto-loads when PowerShell MCP sessions are created.
+AgentBricks is a self-teaching PowerShell module that provides concrete development
+tools, pre-configured patterns for common tools, and meta-learning capabilities for
+Claude agents. The module auto-loads when PowerShell MCP sessions are created.
 
 **Design Philosophy: Hybrid v1+v2+v3 Approach**
+
 - **v1 (Concrete):** Immediately useful functions like Format-Count, Find-Errors
 - **v2 (Pre-configured):** 40+ patterns for JavaScript, Python, .NET, Build tools
-- **v3 (Meta-learning):** Learn-OutputPattern for self-teaching new tools
+- **v3 (Meta-learning):** Register-OutputPattern for self-teaching new tools
 
-**Token Efficiency:** Module functions are NOT included in MCP tool schemas. Agents discover them via `Get-Help` on-demand. This keeps upfront token cost at ~1400 tokens (3 MCP tools only).
+**Token Efficiency:** Module functions are NOT included in MCP tool schemas. Agents
+discover them via `Get-Help` on-demand. This keeps upfront token cost at ~1400 tokens (3
+MCP tools only).
 
 ## Module Structure
 
@@ -19,14 +24,14 @@ AgentBricks/
 ├── AgentBricks.psm1           # Main module (BrickStore initialization, auto-loads patterns)
 ├── Core/
 │   ├── Transform.ps1          # Format-Count, Group-By, Measure-Frequency, Group-Similar, Group-BuildErrors
-│   ├── Extract.ps1            # Extract-Regex, Extract-Between, Extract-Column
-│   ├── Analyze.ps1            # Find-Errors, Find-Warnings, Parse-BuildOutput
+│   ├── Extract.ps1            # Select-RegexMatch, Select-TextBetween, Select-Column
+│   ├── Analyze.ps1            # Find-Errors, Find-Warnings, Get-BuildError
 │   └── Present.ps1            # Show, Export-ToFile, Get-StreamData, Show-StreamSummary
 ├── Meta/
 │   ├── Discovery.ps1          # Find-ProjectTools
-│   └── Learning.ps1           # Set-Pattern, Get-Patterns, Test-Pattern, Learn-OutputPattern
+│   └── Learning.ps1           # Set-Pattern, Get-Patterns, Test-Pattern, Register-OutputPattern
 ├── State/
-│   ├── Management.ps1         # Save-Project, Load-Project, Get-BrickStore, Export-Environment, Clear-Stored, Set-EnvironmentTee
+│   ├── Management.ps1         # Save-Project, Import-Project, Get-BrickStore, Export-Environment, Clear-Stored, Set-EnvironmentTee
 │   └── DevRunCache.ps1        # Initialize-DevRunCache, Get-DevRunCacheStats, Get-CachedStreamData, Clear-DevRunCache
 │   └── DevRunScripts.ps1      # Add-DevScript, Get-DevScripts, Remove-DevScript, Update-DevScriptMetadata, Invoke-DevScript, Invoke-DevScriptChain
 ├── Utility/
@@ -92,7 +97,7 @@ Find-Errors build.log | Group-Similar -Threshold 0.85
 # Items: [array of similar errors]
 
 # Group by property with custom threshold
-Parse-BuildOutput | Group-Similar -Property message -Threshold 0.90
+Get-BuildError | Group-Similar -Property message -Threshold 0.90
 
 # Works with any text
 "hello world", "helo world", "goodbye" | Group-Similar -Threshold 0.80
@@ -109,7 +114,7 @@ Find-Errors build.log | Group-BuildErrors -Pattern "MSBuild-Error" -Threshold 0.
 # Files: 8
 
 # Group GCC errors
-Parse-BuildOutput gcc.log | Group-BuildErrors -Pattern "GCC" -Threshold 0.90
+Get-BuildError gcc.log | Group-BuildErrors -Pattern "GCC" -Threshold 0.90
 
 # Use with custom patterns
 Get-Patterns | Where-Object Category -eq 'error' | ForEach-Object {
@@ -119,33 +124,33 @@ Get-Patterns | Where-Object Category -eq 'error' | ForEach-Object {
 
 ### Extract Functions (3)
 
-**Extract-Regex** - Extract named groups from regex pattern
+**Select-RegexMatch** - Extract named groups from regex pattern
 
 ```powershell
-"app.js:42:15: error: undefined" | Extract-Regex -Pattern '(?<file>\S+):(?<line>\d+)'
+"app.js:42:15: error: undefined" | Select-RegexMatch -Pattern '(?<file>\S+):(?<line>\d+)'
 # Returns PSCustomObject with file="app.js", line="42"
 
 # Use stored pattern
 $pattern = Get-Patterns -Name "ESLint"
-$env:lint_stderr | Extract-Regex -Pattern $pattern.Pattern
+$env:lint_stderr | Select-RegexMatch -Pattern $pattern.Pattern
 ```
 
-**Extract-Between** - Extract text between delimiters
+**Select-TextBetween** - Extract text between delimiters
 
 ```powershell
-"<error>File not found</error>" | Extract-Between -Start "<error>" -End "</error>"
+"<error>File not found</error>" | Select-TextBetween -Start "<error>" -End "</error>"
 # Output: File not found
 
-Get-Content log.xml | Extract-Between -Start "<message>" -End "</message>"
+Get-Content log.xml | Select-TextBetween -Start "<message>" -End "</message>"
 ```
 
-**Extract-Column** - Extract column from delimited text
+**Select-Column** - Extract column from delimited text
 
 ```powershell
-"app.js:42:error:undefined" | Extract-Column -Delimiter ":" -Column 2
+"app.js:42:error:undefined" | Select-Column -Delimiter ":" -Column 2
 # Output: 42
 
-Get-Content data.csv | Extract-Column -Delimiter "," -Column 0
+Get-Content data.csv | Select-Column -Delimiter "," -Column 0
 # Extract first column from CSV
 ```
 
@@ -172,16 +177,16 @@ Find-Warnings npm-output.txt | Format-Count
 #  15x: warning: Deprecated function
 ```
 
-**Parse-BuildOutput** - Parse build tool output (MSBuild, GCC, Clang)
+**Get-BuildError** - Parse build tool output (MSBuild, GCC, Clang)
 
 ```powershell
-Parse-BuildOutput build.log
+Get-BuildError build.log
 # Returns structured objects with File, Line, Col, Severity, Code, Message
 
-Parse-BuildOutput msbuild.log | Where-Object { $_.Code -like "CS*" }
+Get-BuildError msbuild.log | Where-Object { $_.Code -like "CS*" }
 # Filter C# compiler errors
 
-Parse-BuildOutput gcc.log | Group-By Severity | Format-Count
+Get-BuildError gcc.log | Group-By Severity | Format-Count
 #  42x: error
 #  12x: warning
 ```
@@ -272,6 +277,7 @@ Find-ProjectTools
 ```
 
 Detects tools from:
+
 - package.json (npm scripts)
 - pyproject.toml (Python tools)
 - *.csproj (dotnet commands)
@@ -322,17 +328,18 @@ Test-Pattern -Name "ESLint" -Sample "app.js:42:15: error: undefined variable"
 #   message  : undefined variable
 ```
 
-**Learn-OutputPattern** - Interactively learn new tool patterns
+**Register-OutputPattern** - Interactively learn new tool patterns
 
 ```powershell
 # Interactive mode (prompts for pattern selection)
-Learn-OutputPattern -Name "myapp-lint" -Command "myapp lint src/" -Interactive
+Register-OutputPattern -Name "myapp-lint" -Command "myapp lint src/" -Interactive
 
 # Auto mode (detects and registers best-guess pattern)
-Learn-OutputPattern -Name "custom-test" -Command "npm test" -Category test
+Register-OutputPattern -Name "custom-test" -Command "npm test" -Category test
 ```
 
 Auto-detects common patterns:
+
 - GCC-style: `file:line:col: severity: message`
 - MSBuild-style: `file(line,col): severity code: message`
 - Test-style: `STATUS test - message`
@@ -347,10 +354,10 @@ Save-Project -Path ".brickyard.json"
 # Saves patterns, results, chains for reuse
 ```
 
-**Load-Project** - Load saved state from .brickyard.json
+**Import-Project** - Load saved state from .brickyard.json
 
 ```powershell
-Load-Project -Path ".brickyard.json"
+Import-Project -Path ".brickyard.json"
 # Restores patterns from previous session
 ```
 
@@ -394,7 +401,7 @@ Find-Errors build.log | Set-EnvironmentTee -Name "captured_errors" | Show -Top 5
 $env:captured_errors | Measure-Frequency
 
 # Chain with analysis
-Parse-BuildOutput |
+Get-BuildError |
     Set-EnvironmentTee -Name "all_issues" |
     Where-Object Severity -eq 'error' |
     Group-By Code |
@@ -606,13 +613,13 @@ dev-run "dotnet build" -name "build"
 #     3x: CS0246: Type or namespace not found
 
 # Analyze errors in detail
-$env:build_stderr | Extract-Regex -Pattern (Get-Patterns -Name "MSBuild").Pattern | Format-Count
+$env:build_stderr | Select-RegexMatch -Pattern (Get-Patterns -Name "MSBuild").Pattern | Format-Count
 #     8x: CS0103
 #     3x: CS0246
 #     1x: CS1002
 
 # Filter specific error code
-$env:build_stderr | Extract-Regex -Pattern (Get-Patterns -Name "MSBuild").Pattern |
+$env:build_stderr | Select-RegexMatch -Pattern (Get-Patterns -Name "MSBuild").Pattern |
     Where-Object { $_.Code -eq "CS0103" }
 ```
 
@@ -629,14 +636,14 @@ Find-ProjectTools
 dev-run "npm run test" -name "test"
 
 # Analyze test failures
-$env:test_stderr | Extract-Regex -Pattern (Get-Patterns -Name "Jest").Pattern
+$env:test_stderr | Select-RegexMatch -Pattern (Get-Patterns -Name "Jest").Pattern
 ```
 
 ### Workflow 3: Learning Custom Tool
 
 ```powershell
 # Learn new tool pattern interactively
-Learn-OutputPattern -Name "myapp-lint" -Command "myapp lint src/" -Interactive
+Register-OutputPattern -Name "myapp-lint" -Command "myapp lint src/" -Interactive
 
 # Agent sees:
 # Detected patterns:
@@ -645,7 +652,7 @@ Learn-OutputPattern -Name "myapp-lint" -Command "myapp lint src/" -Interactive
 # Select pattern (1-2) or 'c' for custom: 1
 
 # Pattern registered and ready for use
-$env:lint_output | Extract-Regex -Pattern (Get-Patterns -Name "myapp-lint").Pattern
+$env:lint_output | Select-RegexMatch -Pattern (Get-Patterns -Name "myapp-lint").Pattern
 
 # Save for future sessions
 Save-Project -Path ".brickyard.json"
@@ -655,11 +662,11 @@ Save-Project -Path ".brickyard.json"
 
 ```powershell
 # Project A: Learn patterns
-Learn-OutputPattern -Name "company-tool" -Command "tool validate" -Category lint
+Register-OutputPattern -Name "company-tool" -Command "tool validate" -Category lint
 Save-Project -Path "company-patterns.json"
 
 # Project B: Reuse patterns
-Load-Project -Path "C:\shared\company-patterns.json"
+Import-Project -Path "C:\shared\company-patterns.json"
 Get-Patterns -Name "*company*"
 # Pattern available immediately
 ```
@@ -703,6 +710,7 @@ Get-StreamData build Error | Group-Similar -Threshold 0.85 | Show -Top 5
 ## Auto-Loading Behavior
 
 **On session creation:**
+
 1. SessionManager creates new Runspace
 2. Imports AgentBricks from `Modules/AgentBricks/`
 3. Module loads Core, Meta, State, Patterns scripts
@@ -711,6 +719,7 @@ Get-StreamData build Error | Group-Similar -Threshold 0.85 | Show -Top 5
 6. Displays module banner with pattern count
 
 **Module banner output:**
+
 ```
 ╔════════════════════════════════════════════════════════╗
 ║          AgentBricks - Development Toolkit            ║
@@ -726,20 +735,23 @@ Quick Start:
 Pre-loaded patterns: 41
 ```
 
-**Graceful failure:** If module load fails, session continues without AgentBricks (warning logged to stderr).
+**Graceful failure:** If module load fails, session continues without AgentBricks (
+warning logged to stderr).
 
 ## Token Efficiency Strategy
 
 **Problem:** Large tool schemas consume token budget before conversation starts.
 
 **Solution: Just-In-Time Discovery**
+
 - MCP tool schemas: ~1400 tokens (test, pwsh, dev_run only)
 - AgentBricks functions: 0 tokens upfront (not in schemas)
 - Agents discover via `Get-Command -Module AgentBricks`
 - Full help via `Get-Help <function> -Full` (on-demand)
 - Pre-configured patterns: Loaded but not in tool descriptions
 
-**Total upfront cost:** ~1400 tokens vs ~15,000 tokens for 20+ tools exposed as MCP tools.
+**Total upfront cost:** ~1400 tokens vs ~15,000 tokens for 20+ tools exposed as MCP
+tools.
 
 ## Pipeline-Friendly Design
 
@@ -756,31 +768,35 @@ Get-Content build.log |
 # dev-run integration
 dev-run "pytest tests/" -name "test"
 $env:test_stderr |
-    Extract-Regex -Pattern (Get-Patterns -Name "Pytest-Fail").Pattern |
+    Select-RegexMatch -Pattern (Get-Patterns -Name "Pytest-Fail").Pattern |
     Group-By test |
     Format-Count
 ```
 
-Standard output format: `PSCustomObject` with properties suitable for next function in chain.
+Standard output format: `PSCustomObject` with properties suitable for next function in
+chain.
 
 ## Future Enhancements
 
 **Chains (Saved Pipelines):**
+
 ```powershell
 Save-Chain -Name "analyze-build" -Pipeline {
-    Find-Errors | Extract-Regex -Pattern (Get-Patterns -Name "MSBuild").Pattern | Format-Count
+    Find-Errors | Select-RegexMatch -Pattern (Get-Patterns -Name "MSBuild").Pattern | Format-Count
 }
 
 Invoke-Chain -Name "analyze-build" -Input build.log
 ```
 
 **Compare (Baseline vs Current):**
+
 ```powershell
 Compare-Output -Baseline $env:build1_stderr -Current $env:build2_stderr -Pattern "MSBuild"
 # Shows: New errors, Fixed errors, Persistent errors
 ```
 
 **Watch (Monitor Changes):**
+
 ```powershell
 Watch-Command -Command "npm test" -Interval 30s -Alert "error"
 # Re-runs command, alerts on pattern match
@@ -791,25 +807,28 @@ Watch-Command -Command "npm test" -Interval 30s -Alert "error"
 AgentBricks complements the dev_run MCP tool:
 
 **dev_run responsibilities:**
+
 - Execute scripts
 - Capture stdout/stderr separately
 - Store in `$env:name_stdout`, `$env:name_stderr`, `$env:name`
 - Generate condensed summary (error/warning counts)
 
 **AgentBricks responsibilities:**
-- Parse outputs with patterns (Extract-Regex)
+
+- Parse outputs with patterns (Select-RegexMatch)
 - Aggregate and count (Measure-Frequency)
 - Format results (Format-Count)
-- Learn new patterns (Learn-OutputPattern)
+- Learn new patterns (Register-OutputPattern)
 
 **Combined workflow:**
+
 ```powershell
 # Step 1: Run with dev-run
 dev-run "dotnet build" -name "build"
 # Returns: 42 errors (5 unique), top errors listed
 
 # Step 2: Deep dive with AgentBricks
-$env:build_stderr | Extract-Regex -Pattern (Get-Patterns -Name "MSBuild").Pattern |
+$env:build_stderr | Select-RegexMatch -Pattern (Get-Patterns -Name "MSBuild").Pattern |
     Where-Object { $_.Severity -eq "error" } |
     Group-By Code |
     Format-Count

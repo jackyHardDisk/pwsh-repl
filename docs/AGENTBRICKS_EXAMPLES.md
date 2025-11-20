@@ -25,14 +25,17 @@ Get-StreamData 'build' stderr |
 ```
 
 **Why this works:**
+
 - `dev_run` stores all 6 PowerShell streams in JSON ($env:build_streams)
 - `Get-StreamData` retrieves specific stream (stderr) from cache
-- `Group-Similar` uses fuzzy matching to cluster "Cannot find module '@types/react'" and "Cannot find module '@types/node'"
+- `Group-Similar` uses fuzzy matching to cluster "Cannot find module '@types/react'"
+  and "Cannot find module '@types/node'"
 - `Format-Count` aggregates and sorts by frequency
 
 ## 2. Cross-Tool Build Chain with Environments
 
-**Problem:** Multi-stage build (lint → compile → test) across different tools, want single analysis.
+**Problem:** Multi-stage build (lint → compile → test) across different tools, want
+single analysis.
 
 **Solution:** Chain `dev_run` calls in named sessions with environment isolation.
 
@@ -56,7 +59,9 @@ $allErrors | Group-By file | Format-Count
 ```
 
 **Why this works:**
-- Each `dev_run` stores output in separate $env variables (lint_streams, build_streams, test_streams)
+
+- Each `dev_run` stores output in separate $env variables (lint_streams, build_streams,
+  test_streams)
 - Same sessionId maintains variable persistence across calls
 - Environment auto-detects venv (directory path) vs conda (name)
 - All streams accessible via `Get-StreamData` for cross-stage analysis
@@ -70,7 +75,7 @@ $allErrors | Group-By file | Format-Count
 ```powershell
 # Get modified files grouped by status
 pwsh 'git status --short' -sessionId 'git' |
-    Extract-Regex Git-Status |
+    Select-RegexMatch -Pattern (Get-Patterns -Name Git-Status).Pattern |
     Group-By status
 
 # Output:
@@ -80,7 +85,7 @@ pwsh 'git status --short' -sessionId 'git' |
 
 # Check for conflict markers in modified files
 $modified = pwsh 'git status --short' -sessionId 'git' |
-    Extract-Regex Git-Status |
+    Select-RegexMatch -Pattern (Get-Patterns -Name Git-Status).Pattern |
     Where-Object { $_.status -eq 'modified' }
 
 foreach ($file in $modified) {
@@ -92,8 +97,9 @@ foreach ($file in $modified) {
 ```
 
 **Why this works:**
+
 - `pwsh` executes Git command and captures output
-- `Extract-Regex` uses Git-Status pattern to parse status output
+- `Select-RegexMatch` uses Git-Status pattern to parse status output
 - Named groups (status, file) extracted into PSCustomObject properties
 - Session persistence allows variable reuse across commands
 
@@ -119,6 +125,7 @@ pwsh '$errors | Where-Object { $_.file -like "*auth*" } | Show' -sessionId 'anal
 ```
 
 **Why this works:**
+
 - All `pwsh` calls share sessionId='analysis'
 - Variables ($errors, $test) persist across calls
 - `dev_run` output stored in $env:test_streams (survives session)
@@ -152,6 +159,7 @@ while ($true) {
 ```
 
 **Why this works:**
+
 - `dev_run` stores streams in $env immediately (accessible even during execution)
 - `Get-DevRunCacheStats` shows all cached runs
 - Polling loop can run in separate PowerShell session
@@ -161,7 +169,8 @@ while ($true) {
 
 **Problem:** Want detailed error report with file locations, grouped by severity.
 
-**Solution:** Multi-stage pipeline with pattern parsing, grouping, and custom formatting.
+**Solution:** Multi-stage pipeline with pattern parsing, grouping, and custom
+formatting.
 
 ```powershell
 # Run TypeScript compiler
@@ -169,7 +178,7 @@ dev_run 'tsc --noEmit' 'tsc'
 
 # Extract errors with pattern
 $errors = Get-StreamData 'tsc' stderr |
-    Extract-Regex TypeScript |
+    Select-RegexMatch -Pattern (Get-Patterns -Name TypeScript).Pattern |
     Select-Object file, line, col, code, message
 
 # Group by severity (TS#### code)
@@ -187,14 +196,16 @@ foreach ($group in $grouped | Sort-Object Name) {
 ```
 
 **Why this works:**
-- `Extract-Regex` uses TypeScript pattern with named groups
+
+- `Select-RegexMatch` uses TypeScript pattern with named groups
 - PowerShell Select-Object pulls named group values into properties
 - Group-Object for aggregation, nested grouping for file-level stats
 - `Format-Count` simplifies frequency analysis
 
 ## 7. Multi-Tool Docker Build Chain
 
-**Problem:** Docker build with multi-stage Dockerfile, need to track errors across stages.
+**Problem:** Docker build with multi-stage Dockerfile, need to track errors across
+stages.
 
 **Solution:** Parse Docker output, track stage-specific errors.
 
@@ -204,7 +215,7 @@ dev_run 'docker build --no-cache -t myapp .' 'docker'
 
 # Parse errors by stage
 Get-StreamData 'docker' stderr |
-    Extract-Regex Docker |
+    Select-RegexMatch -Pattern (Get-Patterns -Name Docker).Pattern |
     Group-By stage |
     ForEach-Object {
         $stage = $_.Name
@@ -224,6 +235,7 @@ if ($output -match 'No space left') {
 ```
 
 **Why this works:**
+
 - Docker pattern extracts stage name from `ERROR [stage X/Y]` format
 - `Group-By stage` separates errors by build stage
 - Both stdout and stderr accessible via `Get-StreamData`
@@ -247,6 +259,7 @@ $env:result | Find-Errors | Measure-Frequency
 ```
 
 **Why this works:**
+
 - `Set-EnvironmentTee` marks variable for dual behavior
 - Console output flows through in real-time
 - $env:result persists for later analysis
@@ -255,26 +268,31 @@ $env:result | Find-Errors | Measure-Frequency
 ## Key Patterns
 
 **Pattern 1: dev_run + Get-StreamData**
+
 - Run tool with `dev_run` (stores all 6 streams)
 - Retrieve specific stream with `Get-StreamData`
 - Analyze with Find-Errors, Group-Similar, etc.
 
 **Pattern 2: pwsh + sessionId**
+
 - Use same sessionId for variable persistence
 - Build up analysis state incrementally
 - Avoid re-running expensive operations
 
-**Pattern 3: Extract-Regex + Group-By**
+**Pattern 3: Select-RegexMatch + Group-By**
+
 - Parse tool output with pre-configured patterns
 - Group by named group fields (file, severity, code)
 - Aggregate with Format-Count or Measure-Frequency
 
 **Pattern 4: Environment isolation**
+
 - Pass -environment to dev_run for venv/conda activation
 - Auto-detects path (venv) vs name (conda)
 - Keeps dependencies isolated per tool
 
 **Pattern 5: Multi-stage analysis**
+
 - Store results in variables ($errors, $warnings)
 - Combine across tools/stages
 - Cross-reference by file, line, code

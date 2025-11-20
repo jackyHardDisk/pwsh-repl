@@ -1,27 +1,31 @@
 # PowerShell Streams Research
 
-**Research Goal:** Capture all six PowerShell output streams in pwsh and dev_run MCP tools
+**Research Goal:** Capture all six PowerShell output streams in pwsh and dev_run MCP
+tools
 
 **Date:** 2025-11-16
 
 ## PowerShell Six Stream Architecture
 
-**Reference:** IMPLEMENTATION_OUTLINE.md Section 3.1 + Microsoft Learn [PipelineResultTypes Enum](https://learn.microsoft.com/en-us/dotnet/api/system.management.automation.runspaces.pipelineresulttypes)
+**Reference:** IMPLEMENTATION_OUTLINE.md Section 3.1 + Microsoft
+Learn [PipelineResultTypes Enum](https://learn.microsoft.com/en-us/dotnet/api/system.management.automation.runspaces.pipelineresulttypes)
 
 PowerShell has six distinct output streams (numbered 1-6):
 
-| Stream | Number | PSDataStreams Property | Type | Write Cmdlet | Description |
-|--------|--------|----------------------|------|--------------|-------------|
-| Output | 1 | N/A (returned directly) | `PSObject` collection | Write-Output | Success pipeline objects |
-| Error | 2 | `.Error` | `PSDataCollection<ErrorRecord>` | Write-Error | Non-terminating errors |
-| Warning | 3 | `.Warning` | `PSDataCollection<WarningRecord>` | Write-Warning | Warning messages |
-| Verbose | 4 | `.Verbose` | `PSDataCollection<VerboseRecord>` | Write-Verbose | Detailed logging |
-| Debug | 5 | `.Debug` | `PSDataCollection<DebugRecord>` | Write-Debug | Debug messages |
-| Information | 6 | `.Information` | `PSDataCollection<InformationRecord>` | Write-Information, Write-Host | Informational messages |
+| Stream      | Number | PSDataStreams Property  | Type                                  | Write Cmdlet                  | Description              |
+|-------------|--------|-------------------------|---------------------------------------|-------------------------------|--------------------------|
+| Output      | 1      | N/A (returned directly) | `PSObject` collection                 | Write-Output                  | Success pipeline objects |
+| Error       | 2      | `.Error`                | `PSDataCollection<ErrorRecord>`       | Write-Error                   | Non-terminating errors   |
+| Warning     | 3      | `.Warning`              | `PSDataCollection<WarningRecord>`     | Write-Warning                 | Warning messages         |
+| Verbose     | 4      | `.Verbose`              | `PSDataCollection<VerboseRecord>`     | Write-Verbose                 | Detailed logging         |
+| Debug       | 5      | `.Debug`                | `PSDataCollection<DebugRecord>`       | Write-Debug                   | Debug messages           |
+| Information | 6      | `.Information`          | `PSDataCollection<InformationRecord>` | Write-Information, Write-Host | Informational messages   |
 
-**Key Discovery:** Write-Host writes to the **Information stream (6)**, NOT a separate "host" stream.
+**Key Discovery:** Write-Host writes to the **Information stream (6)**, NOT a separate "
+host" stream.
 
 **Accessing Streams (from IMPLEMENTATION_OUTLINE.md:102-109):**
+
 ```csharp
 PSDataCollection<ErrorRecord> errors = powershell.Streams.Error;
 PSDataCollection<WarningRecord> warnings = powershell.Streams.Warning;
@@ -35,11 +39,13 @@ PSDataCollection<InformationRecord> info = powershell.Streams.Information;
 ### PwshTool.cs (Lines 70-107)
 
 **Currently captures:**
+
 - ✅ Output stream (1) - via `results` collection
 - ✅ Error stream (2) - via `pwsh.Streams.Error`
 - ✅ Warning stream (3) - via `pwsh.Streams.Warning`
 
 **Missing:**
+
 - ❌ Verbose stream (4) - `pwsh.Streams.Verbose`
 - ❌ Debug stream (5) - `pwsh.Streams.Debug`
 - ❌ Information stream (6) - `pwsh.Streams.Information` (includes Write-Host)
@@ -49,10 +55,12 @@ PSDataCollection<InformationRecord> info = powershell.Streams.Information;
 **Currently uses:** Script-based redirection with `2>&1` operator
 
 **Captures:**
+
 - ✅ Output stream (1) - via `$stdoutLines`
 - ⚠️ Error stream (2) - partially via ErrorRecord detection in `2>&1` output
 
 **Missing:**
+
 - ❌ Warning stream (3)
 - ❌ Verbose stream (4)
 - ❌ Debug stream (5)
@@ -103,16 +111,17 @@ if (errors != null && errors.Count > 0)
 **Two Error Types:**
 
 1. **Non-Terminating Errors** (collected in Streams.Error)
-   - Continue execution
-   - Access via `powershell.Streams.Error`
-   - Check `powershell.HadErrors` boolean
+    - Continue execution
+    - Access via `powershell.Streams.Error`
+    - Check `powershell.HadErrors` boolean
 
 2. **Terminating Errors** (throw RuntimeException)
-   - Stop execution
-   - Catch with `catch (RuntimeException ex)`
-   - Access via `ex.ErrorRecord`
+    - Stop execution
+    - Catch with `catch (RuntimeException ex)`
+    - Access via `ex.ErrorRecord`
 
 **Pattern:**
+
 ```csharp
 try
 {
@@ -145,7 +154,9 @@ $DebugPreference = "Continue"    # Default: SilentlyContinue
 $InformationPreference = "Continue"  # Default: SilentlyContinue (PS 5.0+)
 ```
 
-**Critical:** Even if preference is SilentlyContinue, messages ARE written to `pwsh.Streams.*` collections. Preference only controls console display, NOT stream capture.
+**Critical:** Even if preference is SilentlyContinue, messages ARE written to
+`pwsh.Streams.*` collections. Preference only controls console display, NOT stream
+capture.
 
 ## Implementation Recommendations
 
@@ -225,6 +236,7 @@ private static string FormatResults(ICollection<PSObject> results, PowerShell pw
 ```
 
 **Impact:**
+
 - Token increase: ~200-300 tokens (minimal)
 - Show-Session function will work (Write-Host → Information stream)
 - Complete stream visibility for debugging
@@ -320,7 +332,8 @@ command 2>&1            # Redirect errors to output stream (merging)
 command 4>&2            # Redirect verbose to error stream
 ```
 
-**Note:** Redirection converts structured records to strings. For structured access, use `PowerShell.Streams.*` collections.
+**Note:** Redirection converts structured records to strings. For structured access, use
+`PowerShell.Streams.*` collections.
 
 ## Testing Plan
 
@@ -367,7 +380,8 @@ Information:
 
 **Root Cause:** Write-Host writes to Information stream, which PwshTool doesn't capture.
 
-**Fix:** Add Information stream capture to PwshTool.FormatResults (see Implementation section above).
+**Fix:** Add Information stream capture to PwshTool.FormatResults (see Implementation
+section above).
 
 **Alternative:** Convert Show-Session to use Write-Output instead of Write-Host.
 
@@ -379,7 +393,8 @@ Information:
 
 **Token cost:** ~200-300 additional tokens for expanded output formatting
 
-**Memory:** PSDataCollection is already allocated by PowerShell runtime, we're just reading it
+**Memory:** PSDataCollection is already allocated by PowerShell runtime, we're just
+reading it
 
 **Recommendation:** Enable all six streams by default. Benefits outweigh minimal cost.
 
@@ -415,21 +430,26 @@ else
     return obj.ToString();  // Uses PowerShell's default ToString
 ```
 
-**Critical Detail (from IMPLEMENTATION_OUTLINE.md:380-385):** Always set Width parameter to prevent truncation:
+**Critical Detail (from IMPLEMENTATION_OUTLINE.md:380-385):** Always set Width parameter
+to prevent truncation:
+
 ```csharp
 ps.AddCommand("Out-String");
 ps.AddParameter("Width", 250);  // Default can truncate long output
 ```
 
-Current PwshTool.cs implementation uses automatic Out-String detection (lines 40-54) which is superior to manual formatting.
+Current PwshTool.cs implementation uses automatic Out-String detection (lines 40-54)
+which is superior to manual formatting.
 
 ## References
 
 **Project Documentation:**
+
 - IMPLEMENTATION_OUTLINE.md Section 3 (Stream Handling)
 - IMPLEMENTATION_OUTLINE.md Section 10.1 (Stream Clearing)
 
 **Microsoft Learn:**
+
 - [Configure runbook output and message streams](https://learn.microsoft.com/en-us/azure/automation/automation-runbook-output-and-messages)
 - [PSDataStreams Class](https://learn.microsoft.com/en-us/dotnet/api/system.management.automation.psdatastreams?view=powershellsdk-7.4.0)
 - [Runspace04 Sample](https://learn.microsoft.com/en-us/powershell/scripting/developer/hosting/runspace04-sample?view=powershell-7.5)
@@ -448,21 +468,27 @@ Current PwshTool.cs implementation uses automatic Out-String detection (lines 40
 
 ## Edge Cases
 
-**Progress stream:** Rarely used (auto-generated activity tracking). Recommend skip for now, add if needed.
+**Progress stream:** Rarely used (auto-generated activity tracking). Recommend skip for
+now, add if needed.
 
 **Empty streams:** Safe to check `.Count > 0` before iterating.
 
 **Null streams:** PSDataStreams properties are never null, but items can be.
 
-**Preference variables:** Streams capture regardless of preference settings. Preferences only control console display.
+**Preference variables:** Streams capture regardless of preference settings. Preferences
+only control console display.
 
-**Stream clearing:** Current `pwsh.Streams.ClearStreams()` in finally block is correct - clears all six streams.
+**Stream clearing:** Current `pwsh.Streams.ClearStreams()` in finally block is correct -
+clears all six streams.
 
-**CRITICAL (from IMPLEMENTATION_OUTLINE.md:360-365):** ALWAYS clear streams between uses to prevent error accumulation:
+**CRITICAL (from IMPLEMENTATION_OUTLINE.md:360-365):** ALWAYS clear streams between uses
+to prevent error accumulation:
+
 ```csharp
 // From PowerAuger pattern - prevents stream accumulation across calls
 pwsh.Commands.Clear();
 pwsh.Streams.ClearStreams();  // Critical for session reuse!
 ```
 
-This is already implemented correctly in PwshTool.cs:65-66 and SessionManager.cs:117-118.
+This is already implemented correctly in PwshTool.cs:65-66 and SessionManager.cs:
+117-118.

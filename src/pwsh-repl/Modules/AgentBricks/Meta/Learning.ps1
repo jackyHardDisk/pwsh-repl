@@ -5,7 +5,7 @@ function Set-Pattern
     Define or update a named regex pattern for tool output parsing.
 
     .DESCRIPTION
-    Stores a named regex pattern in the BrickStore for use with Extract-Regex and
+    Stores a named regex pattern in the BrickStore for use with Select-RegexMatch and
     other analysis functions. Patterns should use named capture groups to extract
     structured data from tool output.
 
@@ -119,7 +119,7 @@ function Get-Patterns
 
     .EXAMPLE
     PS> $pattern = Get-Patterns -Name "ESLint"
-    PS> $env:lint_stderr | Extract-Regex -Pattern $pattern.Pattern
+    PS> $env:lint_stderr | Select-RegexMatch -Pattern $pattern.Pattern
     # Use stored pattern in analysis
 
     .NOTES
@@ -177,7 +177,7 @@ function Test-Pattern
     Name of registered pattern to test.
 
     .PARAMETER Sample
-    Sample text to test against. If omitted, uses stored sample from Learn-OutputPattern.
+    Sample text to test against. If omitted, uses stored sample from Register-OutputPattern.
 
     .PARAMETER ShowMatches
     Display matched values instead of just count.
@@ -275,11 +275,11 @@ function Test-Pattern
     }
 }
 
-function Learn-OutputPattern
+function Register-OutputPattern
 {
     <#
     .SYNOPSIS
-    Interactively learn a tool's output pattern by running it and analyzing output.
+    Interactively register a tool's output pattern by running it and analyzing output.
 
     .DESCRIPTION
     Executes a command, captures output, and helps you define a regex pattern to
@@ -303,11 +303,11 @@ function Learn-OutputPattern
     Pattern category: 'error', 'warning', 'test', 'build'.
 
     .EXAMPLE
-    PS> Learn-OutputPattern -Name "myapp-lint" -Command "myapp lint src/" -Interactive
+    PS> Register-OutputPattern -Name "myapp-lint" -Command "myapp lint src/" -Interactive
     # Runs command, shows detected patterns, prompts for selection
 
     .EXAMPLE
-    PS> Learn-OutputPattern -Name "custom-test" -Command "npm test" -Category test
+    PS> Register-OutputPattern -Name "custom-test" -Command "npm test" -Category test
     # Auto-learn test output pattern
 
     .NOTES

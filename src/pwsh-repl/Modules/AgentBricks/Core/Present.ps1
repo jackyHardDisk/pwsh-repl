@@ -37,7 +37,7 @@ function Show
          1x: Invalid syntax
 
     .EXAMPLE
-    PS> Parse-BuildOutput gcc.log | Show -Format table
+    PS> Get-BuildError gcc.log | Show -Format table
     File          Line Col Message
     ----          ---- --- -------
     main.c        42   15  undefined reference to 'foo'
@@ -163,7 +163,7 @@ function Export-ToFile
     # Auto-detects CSV format from extension
 
     .EXAMPLE
-    PS> Parse-BuildOutput gcc.log | Export-ToFile build-errors.json -Format json
+    PS> Get-BuildError gcc.log | Export-ToFile build-errors.json -Format json
     # Explicit JSON format
 
     .EXAMPLE

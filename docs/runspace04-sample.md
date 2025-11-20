@@ -1,6 +1,11 @@
 # Runspace04 Sample
 
-This sample shows how to use the [System.Management.Automation.PowerShell](/en-us/dotnet/api/system.management.automation.powershell) class to run commands, and how to catch terminating errors that are thrown when running the commands. Two commands are run, and the last command is passed a parameter argument that is not valid. As a result, no objects are returned and a terminating error is thrown.
+This sample shows how to use
+the [System.Management.Automation.PowerShell](/en-us/dotnet/api/system.management.automation.powershell)
+class to run commands, and how to catch terminating errors that are thrown when running
+the commands. Two commands are run, and the last command is passed a parameter argument
+that is not valid. As a result, no objects are returned and a terminating error is
+thrown.
 
 ## Requirements
 
@@ -10,17 +15,27 @@ This sample requires Windows PowerShell 2.0.
 
 This sample demonstrates the following.
 
-- Creating a [System.Management.Automation.PowerShell](/en-us/dotnet/api/system.management.automation.powershell) object.
-- Adding commands to the pipeline of the [System.Management.Automation.PowerShell](/en-us/dotnet/api/system.management.automation.powershell) object.
+- Creating
+  a [System.Management.Automation.PowerShell](/en-us/dotnet/api/system.management.automation.powershell)
+  object.
+- Adding commands to the pipeline of
+  the [System.Management.Automation.PowerShell](/en-us/dotnet/api/system.management.automation.powershell)
+  object.
 - Adding parameter arguments to the pipeline.
 - Invoking the commands synchronously.
-- Using [System.Management.Automation.PSObject](/en-us/dotnet/api/System.Management.Automation.PSObject) objects to extract and display properties from the objects returned by the commands.
-- Retrieving and displaying error records that were generated during the running of the commands.
+-
+Using [System.Management.Automation.PSObject](/en-us/dotnet/api/System.Management.Automation.PSObject)
+objects to extract and display properties from the objects returned by the commands.
+- Retrieving and displaying error records that were generated during the running of the
+  commands.
 - Catching and displaying terminating exceptions thrown by the commands.
 
 ## Example
 
-This sample runs commands synchronously in the default runspace provided by Windows PowerShell. The last command throws a terminating error because a parameter argument that is not valid is passed to the command. The terminating error is trapped and displayed.
+This sample runs commands synchronously in the default runspace provided by Windows
+PowerShell. The last command throws a terminating error because a parameter argument
+that is not valid is passed to the command. The terminating error is trapped and
+displayed.
 
 ```csharp
 namespace Microsoft.Samples.PowerShell.Runspaces
