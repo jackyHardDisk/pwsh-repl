@@ -36,7 +36,7 @@ if (Test-Path ".brickyard.json")
 {
     try
     {
-        Load-Project -Path ".brickyard.json" -ErrorAction SilentlyContinue
+        Import-Project -Path ".brickyard.json" -ErrorAction SilentlyContinue
         Write-Verbose "Loaded project patterns from .brickyard.json"
     }
     catch

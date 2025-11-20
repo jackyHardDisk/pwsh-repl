@@ -572,7 +572,7 @@ function Group-BuildErrors
             return
         }
 
-        $extracted = $items | Extract-Regex -Pattern $patternObj.Pattern
+        $extracted = $items | Select-RegexMatch -Pattern $patternObj.Pattern
         if (-not $extracted)
         {
             Write-Warning "No matches found for pattern '$Pattern'"

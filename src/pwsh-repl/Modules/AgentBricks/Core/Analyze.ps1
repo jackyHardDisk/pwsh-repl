@@ -266,11 +266,11 @@ function Find-Warnings
     }
 }
 
-function Parse-BuildOutput
+function Get-BuildError
 {
     <#
     .SYNOPSIS
-    Parse build errors from common build tools (MSBuild, GCC, CMake, etc.).
+    Get build errors from common build tools (MSBuild, GCC, CMake, etc.).
 
     .DESCRIPTION
     Analyzes build output from various compilers and build systems, extracting
@@ -294,7 +294,7 @@ function Parse-BuildOutput
     Hint about build tool type: 'MSBuild', 'GCC', 'CMake', 'Maven'. Auto-detects if omitted.
 
     .EXAMPLE
-    PS> Parse-BuildOutput build.log
+    PS> Get-BuildError build.log
 
     File          Line Col Code Message
     ----          ---- --- ---- -------
@@ -302,15 +302,15 @@ function Parse-BuildOutput
     Utils.cs      128  8   CS0029 Cannot convert type 'int' to 'string'
 
     .EXAMPLE
-    PS> Get-Content cmake-output.txt | Parse-BuildOutput -ToolType CMake
+    PS> Get-Content cmake-output.txt | Get-BuildError -ToolType CMake
     # Parse CMake configure errors
 
     .EXAMPLE
-    PS> $env:build_stderr | Parse-BuildOutput | Where-Object { $_.Code -like "CS*" }
+    PS> $env:build_stderr | Get-BuildError | Where-Object { $_.Code -like "CS*" }
     # Filter C# compiler errors from dev-run output
 
     .EXAMPLE
-    PS> Parse-BuildOutput gcc.log | Group-Object File | Sort-Object Count -Descending
+    PS> Get-BuildError gcc.log | Group-Object File | Sort-Object Count -Descending
     # Find files with most errors
 
     .NOTES

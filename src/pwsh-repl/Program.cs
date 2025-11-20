@@ -2,8 +2,9 @@ using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using PowerShellMcpServer.pwsh_repl.Core;
+using PowerShellMcpServer.pwsh_repl.Resources;
 
-// Note: stdin pipe configuration is handled in PowerShellPool.cs for each runspace
+// Note: stdin pipe configuration is handled in SessionManager.cs for each runspace
 
 // Create minimal host builder
 var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -11,11 +12,15 @@ var builder = Host.CreateEmptyApplicationBuilder(null);
 // Register SessionManager as singleton (shared across all tool calls)
 builder.Services.AddSingleton<SessionManager>();
 
+// Register resource provider
+builder.Services.AddSingleton<PowerShellModuleResourceProvider>();
+
 // Configure MCP server with stdio transport
 builder.Services
     .AddMcpServer()
     .WithStdioServerTransport()
-    .WithToolsFromAssembly();
+    .WithToolsFromAssembly()
+    .WithResourcesFromAssembly();
 
 // Run the server
 await builder.Build().RunAsync();

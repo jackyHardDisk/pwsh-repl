@@ -1,8 +1,8 @@
-function Extract-Regex
+function Select-RegexMatch
 {
     <#
     .SYNOPSIS
-    Extract data using regular expressions with named groups.
+    Select data using regular expressions with named groups.
 
     .DESCRIPTION
     Applies a regex pattern to input text and extracts data into PSCustomObject properties
@@ -28,20 +28,20 @@ function Extract-Regex
     Extract all matches instead of just the first match per line.
 
     .EXAMPLE
-    PS> "app.js:42:15: error: undefined variable" | Extract-Regex -Pattern '(?<file>[\w.]+):(?<line>\d+):(?<col>\d+): (?<msg>.+)'
+    PS> "app.js:42:15: error: undefined variable" | Select-RegexMatch -Pattern '(?<file>[\w.]+):(?<line>\d+):(?<col>\d+): (?<msg>.+)'
 
     file   line col msg
     ----   ---- --- ---
     app.js 42   15  error: undefined variable
 
     .EXAMPLE
-    PS> Get-Content errors.log | Extract-Regex -Pattern 'ERROR: (?<message>.+)' -Group message
+    PS> Get-Content errors.log | Select-RegexMatch -Pattern 'ERROR: (?<message>.+)' -Group message
     Database connection failed
     Invalid API key
     Timeout after 30 seconds
 
     .EXAMPLE
-    PS> "key1=value1 key2=value2" | Extract-Regex -Pattern '(?<key>\w+)=(?<value>\S+)' -All
+    PS> "key1=value1 key2=value2" | Select-RegexMatch -Pattern '(?<key>\w+)=(?<value>\S+)' -All
 
     key  value
     ---  -----
@@ -49,7 +49,7 @@ function Extract-Regex
     key2 value2
 
     .EXAMPLE
-    PS> Get-Content build.log | Extract-Regex -Pattern '(?<file>[\w/\\.-]+)\((?<line>\d+),(?<col>\d+)\): error (?<code>\w+): (?<msg>.+)'
+    PS> Get-Content build.log | Select-RegexMatch -Pattern '(?<file>[\w/\\.-]+)\((?<line>\d+),(?<col>\d+)\): error (?<code>\w+): (?<msg>.+)'
     # Extracts structured error data from MSBuild output
 
     .NOTES
@@ -126,11 +126,11 @@ function Extract-Regex
     }
 }
 
-function Extract-Between
+function Select-TextBetween
 {
     <#
     .SYNOPSIS
-    Extract text between two marker strings.
+    Select text between two marker strings.
 
     .DESCRIPTION
     Extracts substring between start and end markers. Useful for parsing structured
@@ -155,23 +155,23 @@ function Extract-Between
     Include start and end markers in the output.
 
     .EXAMPLE
-    PS> "The <b>quick</b> brown fox" | Extract-Between -Start "<b>" -End "</b>"
+    PS> "The <b>quick</b> brown fox" | Select-TextBetween -Start "<b>" -End "</b>"
     quick
 
     .EXAMPLE
-    PS> 'Error: "file not found" in module' | Extract-Between -Start '"' -End '"'
+    PS> 'Error: "file not found" in module' | Select-TextBetween -Start '"' -End '"'
     file not found
 
     .EXAMPLE
-    PS> Get-Content log.txt | Extract-Between -Start "[ERROR]" -End "[/ERROR]"
+    PS> Get-Content log.txt | Select-TextBetween -Start "[ERROR]" -End "[/ERROR]"
     # Extracts error details between markers
 
     .EXAMPLE
-    PS> "start{outer{inner}outer}end" | Extract-Between -Start "{" -End "}" -Greedy
+    PS> "start{outer{inner}outer}end" | Select-TextBetween -Start "{" -End "}" -Greedy
     outer{inner}outer
 
     .EXAMPLE
-    PS> "start{outer{inner}outer}end" | Extract-Between -Start "{" -End "}"
+    PS> "start{outer{inner}outer}end" | Select-TextBetween -Start "{" -End "}"
     outer{inner
 
     .NOTES
@@ -227,11 +227,11 @@ function Extract-Between
     }
 }
 
-function Extract-Column
+function Select-Column
 {
     <#
     .SYNOPSIS
-    Extract Nth column from delimited text.
+    Select Nth column from delimited text.
 
     .DESCRIPTION
     Extracts a specific column from delimited text (whitespace, comma, tab, etc.).
@@ -253,28 +253,28 @@ function Extract-Column
     Trim whitespace from extracted value. Default is $true.
 
     .EXAMPLE
-    PS> "ERROR 2024-11-15 Database connection failed" | Extract-Column 1
+    PS> "ERROR 2024-11-15 Database connection failed" | Select-Column 1
     ERROR
 
     .EXAMPLE
-    PS> Get-Content access.log | Extract-Column -Column 4
+    PS> Get-Content access.log | Select-Column -Column 4
     # Extract 4th column from each log line (e.g., HTTP status code)
 
     .EXAMPLE
-    PS> "apple,banana,cherry,date" | Extract-Column -Column 3 -Delimiter ","
+    PS> "apple,banana,cherry,date" | Select-Column -Column 3 -Delimiter ","
     cherry
 
     .EXAMPLE
-    PS> "one    two    three    four" | Extract-Column -Column -1
+    PS> "one    two    three    four" | Select-Column -Column -1
     four
 
     .EXAMPLE
-    PS> Get-Content errors.txt | Extract-Column 2 | Measure-Frequency
+    PS> Get-Content errors.txt | Select-Column 2 | Measure-Frequency
     # Count frequency of values in 2nd column
 
     .NOTES
     Returns $null if column doesn't exist.
-    Use Select-Object -First N | Extract-Column for preview of large files.
+    Use Select-Object -First N | Select-Column for preview of large files.
     #>
     [CmdletBinding()]
     param(

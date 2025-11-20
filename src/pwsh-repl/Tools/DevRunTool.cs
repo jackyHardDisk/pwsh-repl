@@ -4,9 +4,9 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using ModelContextProtocol.Server;
-using PowerShellMcpServer.Core;
+using PowerShellMcpServer.pwsh_repl.Core;
 
-namespace PowerShellMcpServer.Tools;
+namespace PowerShellMcpServer.pwsh_repl.Tools;
 
 /// <summary>
 ///     MCP tool for iterative development workflows with output capture and analysis.
@@ -26,7 +26,7 @@ public class DevRunTool
 
     [McpServerTool]
     [Description(
-        "Iterative development wrapper with output capture. Runs script, stores all streams in JSON hashtable, and returns configurable summary with stream analysis.\n\nStores: $env:name_streams (JSON with Error/Warning/Verbose/Debug/Information/Output arrays), $env:name_output (formatted text), $env:name (script for re-run). Retrieve with Get-StreamData, analyze with Show-StreamSummary.\n\nToken efficiency: Returns 15-line summary vs 1000+ raw output lines (99% reduction). Full output accessible via pwsh(script='Get-StreamData \"name\" stderr').\n\nExamples:\n- mcp__powershell-persistent__dev_run(script='npm test', name='test')\n- mcp__powershell-persistent__dev_run(script='dotnet build', name='build', sessionId='myproject', streams=['Error', 'Warning', 'Output'])\n- mcp__powershell-persistent__dev_run(script='pytest tests/', name='pytest', environment='planetarium-test', sessionId='testing')\n- mcp__powershell-persistent__dev_run(name='test')  # Re-run saved script\n- mcp__powershell-persistent__dev_run(script='docker build .', name='docker', timeoutSeconds=300)\n\nThen analyze: mcp__powershell-persistent__pwsh(script='Get-StreamData \"test\" stderr | Find-Errors | Group-Similar | Format-Count', sessionId='myproject')")]
+        "Run script with token-efficient output capture (99% reduction). Stores streams in $env:name_* variables. Returns 15-line summary. Re-run with name only. Analyze with Get-StreamData | AgentBricks functions.")]
     public string DevRun(
         [Description(
             "PowerShell script to execute (optional if name is provided for re-run)")]
@@ -85,9 +85,8 @@ public class DevRunTool
             var requestedStreams = streams ?? new[] { "Error", "Warning" };
 
             // Execute script with timeout
-            session.PowerShell.AddScript(script);
-
-            var invokeTask = Task.Run(() => session.PowerShell.Invoke());
+            // ExecuteScript handles stdin swapping and command cleanup
+            var invokeTask = Task.Run(() => _sessionManager.ExecuteScript(session, script));
             var timeout = TimeSpan.FromSeconds(timeoutSeconds);
 
             ICollection<PSObject> results;

@@ -1,37 +1,37 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <UseRidGraph>true</UseRidGraph>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0-windows</TargetFramework>
+        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+        <UseRidGraph>true</UseRidGraph>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="ModelContextProtocol" Version="0.4.0-preview.3" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
-    <PackageReference Include="Microsoft.PowerShell.SDK" Version="7.4.0" />
-    <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
-  </ItemGroup>
-
-  <Target Name="CopyPowerShellModules" AfterTargets="Build">
     <ItemGroup>
-      <PowerShellModules Include="$(OutDir)runtimes\win\lib\net8.0\**\*.*" />
+        <PackageReference Include="ModelContextProtocol" Version="0.4.0-preview.3"/>
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0"/>
+        <PackageReference Include="Microsoft.PowerShell.SDK" Version="7.4.0"/>
+        <PackageReference Include="System.Threading.Channels" Version="8.0.0"/>
     </ItemGroup>
-    <Copy SourceFiles="@(PowerShellModules)"
-          DestinationFolder="$(OutDir)%(RecursiveDir)"
-          SkipUnchangedFiles="true" />
-  </Target>
 
-  <Target Name="CopyAgentBricksModule" AfterTargets="Build">
-    <ItemGroup>
-      <AgentBricksFiles Include="src\powershell-persistent\Modules\AgentBricks\**\*.*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(AgentBricksFiles)"
-          DestinationFolder="$(OutDir)Modules\AgentBricks\%(RecursiveDir)"
-          SkipUnchangedFiles="true" />
-  </Target>
+    <Target Name="CopyPowerShellModules" AfterTargets="Build">
+        <ItemGroup>
+            <PowerShellModules Include="$(OutDir)runtimes\win\lib\net8.0\**\*.*"/>
+        </ItemGroup>
+        <Copy SourceFiles="@(PowerShellModules)"
+              DestinationFolder="$(OutDir)%(RecursiveDir)"
+              SkipUnchangedFiles="true"/>
+    </Target>
+
+    <Target Name="CopyAgentBricksModule" AfterTargets="Build">
+        <ItemGroup>
+            <AgentBricksFiles Include="src\pwsh-repl\Modules\AgentBricks\**\*.*"/>
+        </ItemGroup>
+        <Copy SourceFiles="@(AgentBricksFiles)"
+              DestinationFolder="$(OutDir)Modules\AgentBricks\%(RecursiveDir)"
+              SkipUnchangedFiles="true"/>
+    </Target>
 
 </Project>

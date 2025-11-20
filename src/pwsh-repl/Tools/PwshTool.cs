@@ -2,9 +2,9 @@ using System.ComponentModel;
 using System.Management.Automation;
 using System.Text;
 using ModelContextProtocol.Server;
-using PowerShellMcpServer.Core;
+using PowerShellMcpServer.pwsh_repl.Core;
 
-namespace PowerShellMcpServer.Tools;
+namespace PowerShellMcpServer.pwsh_repl.Tools;
 
 /// <summary>
 ///     MCP tool for executing PowerShell scripts with persistent state.
@@ -24,7 +24,7 @@ public class PwshTool
 
     [McpServerTool]
     [Description(
-        "Execute PowerShell script with persistent session state. Variables and state persist across calls within the same session.\n\nAuto-loads AgentBricks module with 31 functions: Transform (Format-Count, Group-By, Measure-Frequency, Group-Similar, Group-BuildErrors), Extract (Extract-Regex, Extract-Between, Extract-Column), Analyze (Find-Errors, Find-Warnings, Parse-BuildOutput), Present (Show, Export-ToFile, Get-StreamData, Show-StreamSummary), Meta (Find-ProjectTools, Set-Pattern, Get-Patterns, Test-Pattern, Learn-OutputPattern), State (Save-Project, Load-Project, Get-BrickStore, Export-Environment, Clear-Stored, Set-EnvironmentTee), DevRunCache (Initialize-DevRunCache, Get-CachedStreamData, Clear-DevRunCache, Get-DevRunCacheStats), Script (Add-DevScript, Get-DevScripts, Remove-DevScript, Update-DevScriptMetadata, Invoke-DevScript, Invoke-DevScriptChain), Utility (Invoke-WithTimeout).\n\n48 pre-configured regex patterns: JavaScript/TypeScript (ESLint, TypeScript, Jest, Vite, Webpack, Prettier, Stylelint, Node.js, Biome), Python (Pytest, Mypy, Flake8, Pylint, Black, Ruff, Traceback, Exception, Unittest, Coverage), .NET (MSBuild-Error, MSBuild-Warning, NuGet, NUnit, xUnit, MSTest, Exception, Roslyn, StyleCop, SDK), Build (GCC-Error/Warning, Clang, CMake-Error/Warning, Make, Linker, Ninja, Maven, Gradle, Rustc, Cargo, Go, Docker), PowerShell (PowerShell-Error), Git (Git-Status, Git-Conflict, Git-MergeConflict), CI/CD (GitHub-Actions).\n\nExamples:\n- mcp__powershell-persistent__pwsh(script='npm test 2>&1 | Find-Errors | Format-Count')\n- mcp__powershell-persistent__pwsh(script='git status --short | Extract-Regex Git-Status | Group-By status', sessionId='myproject')\n- mcp__powershell-persistent__pwsh(script='python -m pytest', environment='C:\\\\projects\\\\myapp\\\\venv', sessionId='testing')\n- mcp__powershell-persistent__pwsh(script='Get-Patterns | Where-Object {$_.Category -eq \"lint\"}', sessionId='analysis', timeoutSeconds=30)")]
+        "Execute PowerShell with persistent sessions. Modules auto-load from PWSH_MCP_MODULES (default: AgentBricks). Use Get-Command or pwsh_mcp_modules:// resources for discovery.")]
     public string Pwsh(
         [Description("PowerShell script to execute")]
         string script,
@@ -47,10 +47,9 @@ public class PwshTool
 
         try
         {
-            session.PowerShell.AddScript(script);
-
             // Execute with timeout using async pattern
-            var invokeTask = Task.Run(() => session.PowerShell.Invoke());
+            // ExecuteScript handles stdin swapping and command cleanup
+            var invokeTask = Task.Run(() => _sessionManager.ExecuteScript(session, script));
             var timeout = TimeSpan.FromSeconds(timeoutSeconds);
 
             if (invokeTask.Wait(timeout))
@@ -73,7 +72,6 @@ public class PwshTool
         }
         finally
         {
-            session.PowerShell.Commands.Clear();
             session.PowerShell.Streams.ClearStreams();
         }
     }
