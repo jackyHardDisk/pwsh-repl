@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
 
-namespace PowerShellMcpServer.Tools;
+namespace PowerShellMcpServer.pwsh_repl.Tools;
 
 [McpServerToolType]
 public class TestTool

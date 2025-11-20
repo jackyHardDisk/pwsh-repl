@@ -1,4 +1,5 @@
-function Find-ProjectTools {
+function Find-ProjectTools
+{
     <#
     .SYNOPSIS
     Auto-detect build tools and commands available in a project.
@@ -73,32 +74,50 @@ function Find-ProjectTools {
 
     # Resolve full path
     $projectRoot = Resolve-Path $Path -ErrorAction SilentlyContinue
-    if (-not $projectRoot) {
+    if (-not $projectRoot)
+    {
         Write-Error "Path not found: $Path"
         return
     }
 
     # JavaScript/TypeScript - package.json
     $packageJsonPath = Join-Path $projectRoot "package.json"
-    if (Test-Path $packageJsonPath) {
-        try {
+    if (Test-Path $packageJsonPath)
+    {
+        try
+        {
             $packageJson = Get-Content $packageJsonPath | ConvertFrom-Json
 
             # Extract scripts
-            if ($packageJson.scripts) {
-                foreach ($script in $packageJson.scripts.PSObject.Properties) {
+            if ($packageJson.scripts)
+            {
+                foreach ($script in $packageJson.scripts.PSObject.Properties)
+                {
                     $scriptName = $script.Name
                     $scriptCmd = $script.Value
 
                     # Categorize script
                     $scriptCategory = 'build'
-                    if ($scriptName -match 'test') { $scriptCategory = 'test' }
-                    elseif ($scriptName -match 'lint|eslint|stylelint') { $scriptCategory = 'lint' }
-                    elseif ($scriptName -match 'format|prettier') { $scriptCategory = 'format' }
-                    elseif ($scriptName -match 'deploy|publish|release') { $scriptCategory = 'deploy' }
+                    if ($scriptName -match 'test')
+                    {
+                        $scriptCategory = 'test'
+                    }
+                    elseif ($scriptName -match 'lint|eslint|stylelint')
+                    {
+                        $scriptCategory = 'lint'
+                    }
+                    elseif ($scriptName -match 'format|prettier')
+                    {
+                        $scriptCategory = 'format'
+                    }
+                    elseif ($scriptName -match 'deploy|publish|release')
+                    {
+                        $scriptCategory = 'deploy'
+                    }
 
                     # Filter by category
-                    if ($Category -eq 'all' -or $Category -eq $scriptCategory) {
+                    if ($Category -eq 'all' -or $Category -eq $scriptCategory)
+                    {
                         $tools += [PSCustomObject]@{
                             Type = 'JavaScript'
                             Tool = 'npm'
@@ -113,40 +132,45 @@ function Find-ProjectTools {
 
             # Check for common dev dependencies
             $devDeps = $packageJson.devDependencies
-            if ($devDeps) {
-                if ($devDeps.eslint) {
+            if ($devDeps)
+            {
+                if ($devDeps.eslint)
+                {
                     $tools += [PSCustomObject]@{
                         Type = 'JavaScript'
                         Tool = 'eslint'
                         Command = "npx eslint ."
                         Category = 'lint'
                         Source = "package.json devDependencies"
-                        Details = "ESLint $($devDeps.eslint)"
+                        Details = "ESLint $( $devDeps.eslint )"
                     }
                 }
-                if ($devDeps.prettier) {
+                if ($devDeps.prettier)
+                {
                     $tools += [PSCustomObject]@{
                         Type = 'JavaScript'
                         Tool = 'prettier'
                         Command = "npx prettier --check ."
                         Category = 'format'
                         Source = "package.json devDependencies"
-                        Details = "Prettier $($devDeps.prettier)"
+                        Details = "Prettier $( $devDeps.prettier )"
                     }
                 }
-                if ($devDeps.typescript) {
+                if ($devDeps.typescript)
+                {
                     $tools += [PSCustomObject]@{
                         Type = 'JavaScript'
                         Tool = 'tsc'
                         Command = "npx tsc --noEmit"
                         Category = 'build'
                         Source = "package.json devDependencies"
-                        Details = "TypeScript $($devDeps.typescript)"
+                        Details = "TypeScript $( $devDeps.typescript )"
                     }
                 }
             }
         }
-        catch {
+        catch
+        {
             Write-Warning "Failed to parse package.json: $_"
         }
     }
@@ -156,7 +180,8 @@ function Find-ProjectTools {
     $pyprojectPath = Join-Path $projectRoot "pyproject.toml"
     $requirementsPath = Join-Path $projectRoot "requirements.txt"
 
-    if (Test-Path $setupPyPath) {
+    if (Test-Path $setupPyPath)
+    {
         $tools += [PSCustomObject]@{
             Type = 'Python'
             Tool = 'setuptools'
@@ -167,12 +192,15 @@ function Find-ProjectTools {
         }
     }
 
-    if (Test-Path $pyprojectPath) {
-        try {
+    if (Test-Path $pyprojectPath)
+    {
+        try
+        {
             $pyprojectContent = Get-Content $pyprojectPath -Raw
 
             # Check for pytest
-            if ($pyprojectContent -match '\[tool\.pytest') {
+            if ($pyprojectContent -match '\[tool\.pytest')
+            {
                 $tools += [PSCustomObject]@{
                     Type = 'Python'
                     Tool = 'pytest'
@@ -184,7 +212,8 @@ function Find-ProjectTools {
             }
 
             # Check for black (formatter)
-            if ($pyprojectContent -match '\[tool\.black') {
+            if ($pyprojectContent -match '\[tool\.black')
+            {
                 $tools += [PSCustomObject]@{
                     Type = 'Python'
                     Tool = 'black'
@@ -196,7 +225,8 @@ function Find-ProjectTools {
             }
 
             # Check for mypy (type checker)
-            if ($pyprojectContent -match '\[tool\.mypy') {
+            if ($pyprojectContent -match '\[tool\.mypy')
+            {
                 $tools += [PSCustomObject]@{
                     Type = 'Python'
                     Tool = 'mypy'
@@ -207,12 +237,14 @@ function Find-ProjectTools {
                 }
             }
         }
-        catch {
+        catch
+        {
             Write-Warning "Failed to parse pyproject.toml: $_"
         }
     }
 
-    if (Test-Path $requirementsPath) {
+    if (Test-Path $requirementsPath)
+    {
         $tools += [PSCustomObject]@{
             Type = 'Python'
             Tool = 'pip'
@@ -227,12 +259,14 @@ function Find-ProjectTools {
     $csprojFiles = Get-ChildItem -Path $projectRoot -Filter "*.csproj" -ErrorAction SilentlyContinue
     $slnFiles = Get-ChildItem -Path $projectRoot -Filter "*.sln" -ErrorAction SilentlyContinue
 
-    if ($slnFiles) {
-        foreach ($sln in $slnFiles) {
+    if ($slnFiles)
+    {
+        foreach ($sln in $slnFiles)
+        {
             $tools += [PSCustomObject]@{
                 Type = 'DotNet'
                 Tool = 'dotnet'
-                Command = "dotnet build $($sln.Name)"
+                Command = "dotnet build $( $sln.Name )"
                 Category = 'build'
                 Source = $sln.Name
                 Details = "Visual Studio solution"
@@ -240,12 +274,14 @@ function Find-ProjectTools {
         }
     }
 
-    if ($csprojFiles) {
-        foreach ($csproj in $csprojFiles) {
+    if ($csprojFiles)
+    {
+        foreach ($csproj in $csprojFiles)
+        {
             $tools += [PSCustomObject]@{
                 Type = 'DotNet'
                 Tool = 'dotnet'
-                Command = "dotnet build $($csproj.Name)"
+                Command = "dotnet build $( $csproj.Name )"
                 Category = 'build'
                 Source = $csproj.Name
                 Details = "C# project"
@@ -255,27 +291,41 @@ function Find-ProjectTools {
 
     # Makefile
     $makefilePath = Join-Path $projectRoot "Makefile"
-    if (Test-Path $makefilePath) {
-        try {
+    if (Test-Path $makefilePath)
+    {
+        try
+        {
             $makefileContent = Get-Content $makefilePath
 
             # Extract targets (lines ending with :)
             $targets = $makefileContent | Where-Object {
                 $_ -match '^([a-zA-Z0-9_-]+):\s*(.*)$'
             } | ForEach-Object {
-                if ($_ -match '^([a-zA-Z0-9_-]+):') {
+                if ($_ -match '^([a-zA-Z0-9_-]+):')
+                {
                     $Matches[1]
                 }
             }
 
-            foreach ($target in $targets) {
+            foreach ($target in $targets)
+            {
                 # Categorize common target names
                 $targetCategory = 'build'
-                if ($target -match 'test') { $targetCategory = 'test' }
-                elseif ($target -match 'clean|install|deps') { $targetCategory = 'build' }
-                elseif ($target -match 'deploy|release') { $targetCategory = 'deploy' }
+                if ($target -match 'test')
+                {
+                    $targetCategory = 'test'
+                }
+                elseif ($target -match 'clean|install|deps')
+                {
+                    $targetCategory = 'build'
+                }
+                elseif ($target -match 'deploy|release')
+                {
+                    $targetCategory = 'deploy'
+                }
 
-                if ($Category -eq 'all' -or $Category -eq $targetCategory) {
+                if ($Category -eq 'all' -or $Category -eq $targetCategory)
+                {
                     $tools += [PSCustomObject]@{
                         Type = 'Make'
                         Tool = 'make'
@@ -287,14 +337,16 @@ function Find-ProjectTools {
                 }
             }
         }
-        catch {
+        catch
+        {
             Write-Warning "Failed to parse Makefile: $_"
         }
     }
 
     # CMake
     $cmakePath = Join-Path $projectRoot "CMakeLists.txt"
-    if (Test-Path $cmakePath) {
+    if (Test-Path $cmakePath)
+    {
         $tools += [PSCustomObject]@{
             Type = 'CMake'
             Tool = 'cmake'
@@ -307,7 +359,8 @@ function Find-ProjectTools {
 
     # Docker
     $dockerfilePath = Join-Path $projectRoot "Dockerfile"
-    if (Test-Path $dockerfilePath) {
+    if (Test-Path $dockerfilePath)
+    {
         $tools += [PSCustomObject]@{
             Type = 'Docker'
             Tool = 'docker'
@@ -319,7 +372,8 @@ function Find-ProjectTools {
     }
 
     $dockerComposePath = Join-Path $projectRoot "docker-compose.yml"
-    if (Test-Path $dockerComposePath) {
+    if (Test-Path $dockerComposePath)
+    {
         $tools += [PSCustomObject]@{
             Type = 'Docker'
             Tool = 'docker-compose'
@@ -331,7 +385,8 @@ function Find-ProjectTools {
     }
 
     # Return results
-    if ($tools.Count -eq 0) {
+    if ($tools.Count -eq 0)
+    {
         Write-Warning "No project tools detected in $projectRoot"
     }
 

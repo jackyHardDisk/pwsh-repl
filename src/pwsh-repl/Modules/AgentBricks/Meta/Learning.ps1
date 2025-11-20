@@ -1,4 +1,5 @@
-function Set-Pattern {
+function Set-Pattern
+{
     <#
     .SYNOPSIS
     Define or update a named regex pattern for tool output parsing.
@@ -50,19 +51,22 @@ function Set-Pattern {
     )
 
     # Initialize BrickStore if not exists
-    if (-not $global:BrickStore) {
+    if (-not $global:BrickStore)
+    {
         $global:BrickStore = @{
-            Results = @{}
-            Patterns = @{}
-            Chains = @{}
+            Results = @{ }
+            Patterns = @{ }
+            Chains = @{ }
         }
     }
 
     # Validate pattern syntax
-    try {
+    try
+    {
         [regex]::new($Pattern) | Out-Null
     }
-    catch {
+    catch
+    {
         Write-Error "Invalid regex pattern: $_"
         return
     }
@@ -80,7 +84,8 @@ function Set-Pattern {
     $global:BrickStore.Patterns[$Name]
 }
 
-function Get-Patterns {
+function Get-Patterns
+{
     <#
     .SYNOPSIS
     List registered output patterns.
@@ -131,30 +136,34 @@ function Get-Patterns {
     )
 
     # Initialize BrickStore if not exists
-    if (-not $global:BrickStore) {
+    if (-not $global:BrickStore)
+    {
         $global:BrickStore = @{
-            Results = @{}
-            Patterns = @{}
-            Chains = @{}
+            Results = @{ }
+            Patterns = @{ }
+            Chains = @{ }
         }
     }
 
     $patterns = $global:BrickStore.Patterns.Values
 
     # Filter by name (supports wildcards)
-    if ($Name) {
+    if ($Name)
+    {
         $patterns = $patterns | Where-Object { $_.Name -like $Name }
     }
 
     # Filter by category
-    if ($Category) {
+    if ($Category)
+    {
         $patterns = $patterns | Where-Object { $_.Category -eq $Category }
     }
 
     $patterns | Sort-Object Name
 }
 
-function Test-Pattern {
+function Test-Pattern
+{
     <#
     .SYNOPSIS
     Test a pattern against sample input to verify it works.
@@ -209,44 +218,55 @@ function Test-Pattern {
     # Get pattern
     $patternObj = Get-Patterns -Name $Name
 
-    if (-not $patternObj) {
+    if (-not $patternObj)
+    {
         Write-Error "Pattern not found: $Name"
         return $false
     }
 
     # Use stored sample if not provided
-    if (-not $Sample) {
-        if ($global:BrickStore.Results[$Name]) {
+    if (-not $Sample)
+    {
+        if ($global:BrickStore.Results[$Name])
+        {
             $Sample = $global:BrickStore.Results[$Name].Sample
         }
-        else {
+        else
+        {
             Write-Error "No sample provided and no stored sample for pattern '$Name'"
             return $false
         }
     }
 
     Write-Host "Pattern: $Name" -ForegroundColor Cyan
-    Write-Host "Description: $($patternObj.Description)" -ForegroundColor Gray
+    Write-Host "Description: $( $patternObj.Description )" -ForegroundColor Gray
     Write-Host ""
 
     # Test pattern
     $match = [regex]::Match($Sample, $patternObj.Pattern)
 
-    if ($match.Success) {
+    if ($match.Success)
+    {
         Write-Host "Matched: YES" -ForegroundColor Green
         Write-Host ""
 
-        if ($ShowMatches -or $true) {
+        if ($ShowMatches -or $true)
+        {
             Write-Host "Extracted fields:" -ForegroundColor Cyan
-            foreach ($groupName in $match.Groups.Keys) {
-                if ($groupName -match '^\d+$') { continue }
+            foreach ($groupName in $match.Groups.Keys)
+            {
+                if ($groupName -match '^\d+$')
+                {
+                    continue
+                }
                 Write-Host ("  {0,-12}: {1}" -f $groupName, $match.Groups[$groupName].Value) -ForegroundColor White
             }
         }
 
         return $true
     }
-    else {
+    else
+    {
         Write-Host "Matched: NO" -ForegroundColor Red
         Write-Host ""
         Write-Host "Sample text:" -ForegroundColor Yellow
@@ -255,7 +275,8 @@ function Test-Pattern {
     }
 }
 
-function Learn-OutputPattern {
+function Learn-OutputPattern
+{
     <#
     .SYNOPSIS
     Interactively learn a tool's output pattern by running it and analyzing output.
@@ -319,24 +340,27 @@ function Learn-OutputPattern {
 
     # Execute command and capture output
     Write-Host "Executing command..." -ForegroundColor Yellow
-    try {
+    try
+    {
         $output = Invoke-Expression $Command 2>&1 | Out-String
     }
-    catch {
+    catch
+    {
         $output = $_.Exception.Message
     }
 
     # Store sample
     $sample = $output
 
-    Write-Host "Captured $($output.Length) bytes of output" -ForegroundColor Green
+    Write-Host "Captured $( $output.Length ) bytes of output" -ForegroundColor Green
     Write-Host ""
 
     # Auto-detect common patterns
     $detectedPatterns = @()
 
     # Pattern 1: file:line:col: message (GCC-style)
-    if ($output -match '[\w/\\.-]+:\d+:\d+:') {
+    if ($output -match '[\w/\\.-]+:\d+:\d+:')
+    {
         $detectedPatterns += [PSCustomObject]@{
             Name = "GCC-style"
             Pattern = '(?<file>[\w/\\.-]+):(?<line>\d+):(?<col>\d+):\s*(?<severity>\w+):\s*(?<message>.+)'
@@ -345,7 +369,8 @@ function Learn-OutputPattern {
     }
 
     # Pattern 2: file(line,col): message (MSBuild-style)
-    if ($output -match '[\w/\\.-]+\(\d+,\d+\):') {
+    if ($output -match '[\w/\\.-]+\(\d+,\d+\):')
+    {
         $detectedPatterns += [PSCustomObject]@{
             Name = "MSBuild-style"
             Pattern = '(?<file>[\w/\\.-]+)\((?<line>\d+),(?<col>\d+)\):\s*(?<severity>\w+)\s*(?<code>\w+):\s*(?<message>.+)'
@@ -354,7 +379,8 @@ function Learn-OutputPattern {
     }
 
     # Pattern 3: FAILED/PASSED test format
-    if ($output -match '(FAILED|PASSED|ERROR)') {
+    if ($output -match '(FAILED|PASSED|ERROR)')
+    {
         $detectedPatterns += [PSCustomObject]@{
             Name = "Test-style"
             Pattern = '(?<status>FAILED|PASSED|ERROR)\s+(?<test>[\w/:.-]+)\s*-?\s*(?<message>.*)'
@@ -363,7 +389,8 @@ function Learn-OutputPattern {
     }
 
     # Pattern 4: Generic error/warning lines
-    if ($output -match '\b(error|warning)\b') {
+    if ($output -match '\b(error|warning)\b')
+    {
         $detectedPatterns += [PSCustomObject]@{
             Name = "Generic"
             Pattern = '(?<severity>error|warning|info):\s*(?<message>.+)'
@@ -371,13 +398,16 @@ function Learn-OutputPattern {
         }
     }
 
-    if ($detectedPatterns.Count -eq 0) {
+    if ($detectedPatterns.Count -eq 0)
+    {
         Write-Host "No common patterns detected. Sample output:" -ForegroundColor Yellow
         Write-Host ($output -split "`n" | Select-Object -First 10 | Out-String)
 
-        if ($Interactive) {
+        if ($Interactive)
+        {
             $customPattern = Read-Host "Enter custom regex pattern (or press Enter to skip)"
-            if ($customPattern) {
+            if ($customPattern)
+            {
                 $description = Read-Host "Enter description"
                 Set-Pattern -Name $Name -Pattern $customPattern -Description $description -Category $Category
                 Write-Host "Pattern registered: $Name" -ForegroundColor Green
@@ -390,37 +420,43 @@ function Learn-OutputPattern {
     Write-Host "Detected patterns:" -ForegroundColor Cyan
     for ($i = 0; $i -lt $detectedPatterns.Count; $i++) {
         $p = $detectedPatterns[$i]
-        Write-Host "  $($i + 1). $($p.Name): $($p.Description)" -ForegroundColor White
+        Write-Host "  $( $i + 1 ). $( $p.Name ): $( $p.Description )" -ForegroundColor White
     }
     Write-Host ""
 
-    if ($Interactive) {
-        $choice = Read-Host "Select pattern (1-$($detectedPatterns.Count)) or 'c' for custom"
+    if ($Interactive)
+    {
+        $choice = Read-Host "Select pattern (1-$( $detectedPatterns.Count )) or 'c' for custom"
 
-        if ($choice -eq 'c') {
+        if ($choice -eq 'c')
+        {
             $customPattern = Read-Host "Enter custom regex pattern"
             $description = Read-Host "Enter description"
             Set-Pattern -Name $Name -Pattern $customPattern -Description $description -Category $Category
         }
-        elseif ($choice -match '^\d+$' -and [int]$choice -le $detectedPatterns.Count) {
+        elseif ($choice -match '^\d+$' -and [int]$choice -le $detectedPatterns.Count)
+        {
             $selected = $detectedPatterns[[int]$choice - 1]
             Set-Pattern -Name $Name -Pattern $selected.Pattern -Description $selected.Description -Category $Category
         }
-        else {
+        else
+        {
             Write-Host "Invalid choice, skipping pattern registration" -ForegroundColor Yellow
             return
         }
     }
-    else {
+    else
+    {
         # Auto-select first detected pattern
         $selected = $detectedPatterns[0]
         Set-Pattern -Name $Name -Pattern $selected.Pattern -Description $selected.Description -Category $Category
-        Write-Host "Auto-registered pattern: $($selected.Name)" -ForegroundColor Green
+        Write-Host "Auto-registered pattern: $( $selected.Name )" -ForegroundColor Green
     }
 
     # Store sample for testing
-    if (-not $global:BrickStore.Results[$Name]) {
-        $global:BrickStore.Results[$Name] = @{}
+    if (-not $global:BrickStore.Results[$Name])
+    {
+        $global:BrickStore.Results[$Name] = @{ }
     }
     $global:BrickStore.Results[$Name].Sample = $sample
 

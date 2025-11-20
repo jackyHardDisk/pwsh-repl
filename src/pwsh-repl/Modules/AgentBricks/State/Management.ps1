@@ -1,4 +1,5 @@
-function Save-Project {
+function Save-Project
+{
     <#
     .SYNOPSIS
     Export learned patterns and state to .brickyard.json file.
@@ -33,11 +34,12 @@ function Save-Project {
     )
 
     # Initialize BrickStore if not exists
-    if (-not $global:BrickStore) {
+    if (-not $global:BrickStore)
+    {
         $global:BrickStore = @{
-            Results = @{}
-            Patterns = @{}
-            Chains = @{}
+            Results = @{ }
+            Patterns = @{ }
+            Chains = @{ }
         }
     }
 
@@ -46,11 +48,12 @@ function Save-Project {
         Version = "1.0"
         CreatedAt = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
         PatternCount = $global:BrickStore.Patterns.Count
-        Patterns = @{}
+        Patterns = @{ }
     }
 
     # Convert patterns to exportable format
-    foreach ($patternName in $global:BrickStore.Patterns.Keys) {
+    foreach ($patternName in $global:BrickStore.Patterns.Keys)
+    {
         $pattern = $global:BrickStore.Patterns[$patternName]
         $exportData.Patterns[$patternName] = @{
             Pattern = $pattern.Pattern
@@ -60,17 +63,20 @@ function Save-Project {
     }
 
     # Save to JSON
-    try {
+    try
+    {
         $exportData | ConvertTo-Json -Depth 5 | Set-Content -Path $Path
-        Write-Host "Saved $($exportData.PatternCount) patterns to $Path" -ForegroundColor Green
+        Write-Host "Saved $( $exportData.PatternCount ) patterns to $Path" -ForegroundColor Green
         Get-Item $Path
     }
-    catch {
+    catch
+    {
         Write-Error "Failed to save project: $_"
     }
 }
 
-function Load-Project {
+function Load-Project
+{
     <#
     .SYNOPSIS
     Import patterns and state from .brickyard.json file.
@@ -111,31 +117,36 @@ function Load-Project {
     )
 
     # Check if file exists
-    if (-not (Test-Path $Path)) {
+    if (-not (Test-Path $Path))
+    {
         Write-Warning "File not found: $Path"
         return
     }
 
     # Initialize BrickStore if not exists or if not merging
-    if (-not $global:BrickStore -or -not $Merge) {
+    if (-not $global:BrickStore -or -not $Merge)
+    {
         $global:BrickStore = @{
-            Results = @{}
-            Patterns = @{}
-            Chains = @{}
+            Results = @{ }
+            Patterns = @{ }
+            Chains = @{ }
         }
     }
 
-    try {
+    try
+    {
         # Load JSON
         $importData = Get-Content $Path | ConvertFrom-Json
 
         # Import patterns
         $loadedCount = 0
-        foreach ($patternName in $importData.Patterns.PSObject.Properties.Name) {
+        foreach ($patternName in $importData.Patterns.PSObject.Properties.Name)
+        {
             $patternData = $importData.Patterns.$patternName
 
             # Validate pattern
-            try {
+            try
+            {
                 [regex]::new($patternData.Pattern) | Out-Null
 
                 # Store pattern
@@ -149,19 +160,22 @@ function Load-Project {
 
                 $loadedCount++
             }
-            catch {
+            catch
+            {
                 Write-Warning "Skipping invalid pattern '$patternName': $_"
             }
         }
 
         Write-Host "Loaded $loadedCount patterns from $Path" -ForegroundColor Green
     }
-    catch {
+    catch
+    {
         Write-Error "Failed to load project: $_"
     }
 }
 
-function Get-BrickStore {
+function Get-BrickStore
+{
     <#
     .SYNOPSIS
     Display current BrickStore state (patterns, results, chains).
@@ -214,48 +228,56 @@ function Get-BrickStore {
     )
 
     # Initialize BrickStore if not exists
-    if (-not $global:BrickStore) {
+    if (-not $global:BrickStore)
+    {
         $global:BrickStore = @{
-            Results = @{}
-            Patterns = @{}
-            Chains = @{}
+            Results = @{ }
+            Patterns = @{ }
+            Chains = @{ }
         }
     }
 
     Write-Host "`nBrickStore State" -ForegroundColor Cyan
     Write-Host "================" -ForegroundColor Cyan
-    Write-Host "Patterns: $($global:BrickStore.Patterns.Count)"
-    Write-Host "Results:  $($global:BrickStore.Results.Count)"
-    Write-Host "Chains:   $($global:BrickStore.Chains.Count)"
+    Write-Host "Patterns: $( $global:BrickStore.Patterns.Count )"
+    Write-Host "Results:  $( $global:BrickStore.Results.Count )"
+    Write-Host "Chains:   $( $global:BrickStore.Chains.Count )"
     Write-Host ""
 
     # Show patterns
     $patterns = $global:BrickStore.Patterns.Values
 
-    if ($Category) {
+    if ($Category)
+    {
         $patterns = $patterns | Where-Object { $_.Category -eq $Category }
     }
 
-    if ($patterns.Count -gt 0) {
+    if ($patterns.Count -gt 0)
+    {
         Write-Host "Patterns:" -ForegroundColor Cyan
 
-        foreach ($pattern in ($patterns | Sort-Object Category, Name)) {
-            if ($Detailed) {
-                Write-Host "  [$($pattern.Category)] $($pattern.Name)" -ForegroundColor White
-                Write-Host "    Description: $($pattern.Description)" -ForegroundColor Gray
-                Write-Host "    Pattern: $($pattern.Pattern)" -ForegroundColor DarkGray
+        foreach ($pattern in ($patterns | Sort-Object Category, Name))
+        {
+            if ($Detailed)
+            {
+                Write-Host "  [$( $pattern.Category )] $( $pattern.Name )" -ForegroundColor White
+                Write-Host "    Description: $( $pattern.Description )" -ForegroundColor Gray
+                Write-Host "    Pattern: $( $pattern.Pattern )" -ForegroundColor DarkGray
                 Write-Host ""
             }
-            else {
-                Write-Host "  [$($pattern.Category)] $($pattern.Name) - $($pattern.Description)" -ForegroundColor White
+            else
+            {
+                Write-Host "  [$( $pattern.Category )] $( $pattern.Name ) - $( $pattern.Description )" -ForegroundColor White
             }
         }
     }
 
     # Show stored results
-    if ($global:BrickStore.Results.Count -gt 0) {
+    if ($global:BrickStore.Results.Count -gt 0)
+    {
         Write-Host "`nStored Results:" -ForegroundColor Cyan
-        foreach ($key in $global:BrickStore.Results.Keys) {
+        foreach ($key in $global:BrickStore.Results.Keys)
+        {
             Write-Host "  $key" -ForegroundColor White
         }
     }
@@ -263,7 +285,8 @@ function Get-BrickStore {
     Write-Host ""
 }
 
-function Export-Environment {
+function Export-Environment
+{
     <#
     .SYNOPSIS
     Export current PowerShell session environment variables to JSON/script format.
@@ -337,7 +360,8 @@ function Export-Environment {
     $envVars = Get-ChildItem Env:
 
     # Apply Include filter
-    if ($Include) {
+    if ($Include)
+    {
         $envVars = $envVars | Where-Object {
             $name = $_.Name
             $Include | Where-Object { $name -like $_ }
@@ -345,7 +369,8 @@ function Export-Environment {
     }
 
     # Apply Exclude filter
-    if ($Exclude) {
+    if ($Exclude)
+    {
         $envVars = $envVars | Where-Object {
             $name = $_.Name
             -not ($Exclude | Where-Object { $name -like $_ })
@@ -353,26 +378,33 @@ function Export-Environment {
     }
 
     # Auto-detect format from file extension
-    if ($Path -and -not $Format) {
-        if ($Path -match '\.ps1$') {
+    if ($Path -and -not $Format)
+    {
+        if ($Path -match '\.ps1$')
+        {
             $Format = 'PowerShell'
         }
-        elseif ($Path -match '\.json$') {
+        elseif ($Path -match '\.json$')
+        {
             $Format = 'JSON'
         }
-        else {
+        else
+        {
             $Format = 'JSON'  # Default
         }
     }
-    elseif (-not $Format) {
+    elseif (-not $Format)
+    {
         $Format = 'Console'
     }
 
     # Build output based on format
-    switch ($Format) {
+    switch ($Format)
+    {
         'JSON' {
-            $envHash = @{}
-            foreach ($var in $envVars) {
+            $envHash = @{ }
+            foreach ($var in $envVars)
+            {
                 $envHash[$var.Name] = $var.Value
             }
 
@@ -384,12 +416,14 @@ function Export-Environment {
                 Variables = $envHash
             }
 
-            if ($Path) {
+            if ($Path)
+            {
                 $exportData | ConvertTo-Json -Depth 5 | Set-Content -Path $Path
-                Write-Host "Exported $($envHash.Count) environment variables to $Path" -ForegroundColor Green
+                Write-Host "Exported $( $envHash.Count ) environment variables to $Path" -ForegroundColor Green
                 Get-Item $Path
             }
-            else {
+            else
+            {
                 $exportData | ConvertTo-Json -Depth 5
             }
         }
@@ -397,42 +431,48 @@ function Export-Environment {
         'PowerShell' {
             $scriptLines = @(
                 "# Environment variable snapshot",
-                "# Exported: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
+                "# Exported: $( Get-Date -Format 'yyyy-MM-dd HH:mm:ss' )",
                 "# Machine: $env:COMPUTERNAME",
                 "# User: $env:USERNAME",
-                "# Variables: $($envVars.Count)",
+                "# Variables: $( $envVars.Count )",
                 ""
             )
 
-            foreach ($var in ($envVars | Sort-Object Name)) {
+            foreach ($var in ($envVars | Sort-Object Name))
+            {
                 $escapedValue = $var.Value -replace '"', '`"'
-                $scriptLines += "`$env:$($var.Name) = `"$escapedValue`""
+                $scriptLines += "`$env:$( $var.Name ) = `"$escapedValue`""
             }
 
             $script = $scriptLines -join "`n"
 
-            if ($Path) {
+            if ($Path)
+            {
                 $script | Set-Content -Path $Path
-                Write-Host "Exported $($envVars.Count) environment variables to $Path" -ForegroundColor Green
+                Write-Host "Exported $( $envVars.Count ) environment variables to $Path" -ForegroundColor Green
                 Get-Item $Path
             }
-            else {
+            else
+            {
                 $script
             }
         }
 
         'Console' {
-            Write-Host "`nEnvironment Variables ($($envVars.Count))" -ForegroundColor Cyan
+            Write-Host "`nEnvironment Variables ($( $envVars.Count ))" -ForegroundColor Cyan
             Write-Host "=" * 60 -ForegroundColor Cyan
 
-            foreach ($var in ($envVars | Sort-Object Name)) {
-                $displayValue = if ($var.Value.Length -gt 60) {
+            foreach ($var in ($envVars | Sort-Object Name))
+            {
+                $displayValue = if ($var.Value.Length -gt 60)
+                {
                     $var.Value.Substring(0, 57) + "..."
                 }
-                else {
+                else
+                {
                     $var.Value
                 }
-                Write-Host "$($var.Name) = $displayValue" -ForegroundColor White
+                Write-Host "$( $var.Name ) = $displayValue" -ForegroundColor White
             }
 
             Write-Host ""
@@ -440,7 +480,8 @@ function Export-Environment {
     }
 }
 
-function Clear-Stored {
+function Clear-Stored
+{
     <#
     .SYNOPSIS
     Clear stored results from BrickStore.
@@ -484,23 +525,27 @@ function Clear-Stored {
     )
 
     # Initialize BrickStore if not exists
-    if (-not $global:BrickStore) {
+    if (-not $global:BrickStore)
+    {
         $global:BrickStore = @{
-            Results = @{}
-            Patterns = @{}
-            Chains = @{}
+            Results = @{ }
+            Patterns = @{ }
+            Chains = @{ }
         }
         Write-Host "BrickStore is already empty" -ForegroundColor Yellow
         return
     }
 
     # Clear specific result
-    if ($Name) {
-        if ($global:BrickStore.Results.ContainsKey($Name)) {
+    if ($Name)
+    {
+        if ( $global:BrickStore.Results.ContainsKey($Name))
+        {
             $global:BrickStore.Results.Remove($Name)
             Write-Host "Cleared stored result: $Name" -ForegroundColor Green
         }
-        else {
+        else
+        {
             Write-Warning "Result not found: $Name"
         }
         return
@@ -512,7 +557,8 @@ function Clear-Stored {
     Write-Host "Cleared all stored results ($resultCount items)" -ForegroundColor Green
 
     # Clear patterns if requested
-    if ($Patterns) {
+    if ($Patterns)
+    {
         $patternCount = $global:BrickStore.Patterns.Count
         $global:BrickStore.Patterns.Clear()
         Write-Host "Cleared all patterns ($patternCount items)" -ForegroundColor Yellow
@@ -520,7 +566,8 @@ function Clear-Stored {
     }
 }
 
-function Set-EnvironmentTee {
+function Set-EnvironmentTee
+{
     <#
     .SYNOPSIS
     Capture pipeline input to environment variable while passing through.
@@ -565,7 +612,7 @@ function Set-EnvironmentTee {
         [Parameter(ValueFromPipeline, Mandatory)]
         $InputObject,
 
-        [Parameter(Position=0, Mandatory)]
+        [Parameter(Position = 0, Mandatory)]
         [string]$Name
     )
 
@@ -575,14 +622,15 @@ function Set-EnvironmentTee {
 
     process {
         $items += $InputObject
-        if ($VerbosePreference -eq 'Continue') {
+        if ($VerbosePreference -eq 'Continue')
+        {
             Write-Verbose "Tee: $_"
         }
     }
 
     end {
         Set-Item "env:$Name" -Value ($items | Out-String)
-        Write-Verbose "Stored $($items.Count) items to `$env:$Name"
+        Write-Verbose "Stored $( $items.Count ) items to `$env:$Name"
         $items
     }
 }

@@ -2,15 +2,18 @@
 # Provides performant $global cache on top of $env JSON persistence
 
 # Initialize global cache structures (ConcurrentDictionary for thread safety)
-if (-not $global:DevRunCache) {
+if (-not $global:DevRunCache)
+{
     $global:DevRunCache = [System.Collections.Concurrent.ConcurrentDictionary[string, object]]::new()
 }
 
-if (-not $global:DevRunScripts) {
+if (-not $global:DevRunScripts)
+{
     $global:DevRunScripts = [System.Collections.Concurrent.ConcurrentDictionary[string, object]]::new()
 }
 
-function Initialize-DevRunCache {
+function Initialize-DevRunCache
+{
     <#
     .SYNOPSIS
     Initialize DevRun cache structures in $global scope.
@@ -38,7 +41,8 @@ function Initialize-DevRunCache {
     Write-Verbose "DevRun cache initialized"
 }
 
-function Get-CachedStreamData {
+function Get-CachedStreamData
+{
     <#
     .SYNOPSIS
     Get stream data from cache, warming from $env JSON if needed.
@@ -75,11 +79,11 @@ function Get-CachedStreamData {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory, Position=0)]
+        [Parameter(Mandatory, Position = 0)]
         [string]$Name,
 
-        [Parameter(Mandatory, Position=1)]
-        [ValidateSet("Error","Warning","Verbose","Debug","Information","Output")]
+        [Parameter(Mandatory, Position = 1)]
+        [ValidateSet("Error", "Warning", "Verbose", "Debug", "Information", "Output")]
         [string]$Stream,
 
         [Parameter()]
@@ -87,7 +91,8 @@ function Get-CachedStreamData {
     )
 
     # Force invalidation if requested
-    if ($Force -and $global:DevRunCache.ContainsKey($Name)) {
+    if ($Force -and $global:DevRunCache.ContainsKey($Name))
+    {
         $removed = $null
         $global:DevRunCache.TryRemove($Name, [ref]$removed) | Out-Null
         Write-Verbose "Cache invalidated for '$Name'"
@@ -95,12 +100,15 @@ function Get-CachedStreamData {
 
     # Try to get from cache
     $cached = $null
-    if ($global:DevRunCache.TryGetValue($Name, [ref]$cached)) {
+    if ( $global:DevRunCache.TryGetValue($Name, [ref]$cached))
+    {
         Write-Verbose "Cache hit for '$Name'"
-        if ($cached -and $cached.ContainsKey($Stream)) {
+        if ($cached -and $cached.ContainsKey($Stream))
+        {
             return $cached[$Stream]
         }
-        else {
+        else
+        {
             Write-Warning "Stream '$Stream' not found in cached data for '$Name'"
             return
         }
@@ -112,12 +120,14 @@ function Get-CachedStreamData {
     $envVarName = "${Name}_streams"
     $json = Get-Item "env:$envVarName" -ErrorAction SilentlyContinue
 
-    if (-not $json) {
+    if (-not $json)
+    {
         Write-Error "No stream data found for '$Name'. Run dev_run with name='$Name' first."
         return
     }
 
-    try {
+    try
+    {
         # Parse JSON and cache it
         $data = $json.Value | ConvertFrom-Json -AsHashtable
 
@@ -126,19 +136,23 @@ function Get-CachedStreamData {
         Write-Verbose "Cached stream data for '$Name'"
 
         # Return requested stream
-        if ($data.ContainsKey($Stream)) {
+        if ( $data.ContainsKey($Stream))
+        {
             return $data[$Stream]
         }
-        else {
+        else
+        {
             Write-Warning "Stream '$Stream' not found in data for '$Name'"
         }
     }
-    catch {
+    catch
+    {
         Write-Error "Failed to parse JSON from $envVarName : $_"
     }
 }
 
-function Clear-DevRunCache {
+function Clear-DevRunCache
+{
     <#
     .SYNOPSIS
     Clear cached DevRun data.
@@ -166,21 +180,25 @@ function Clear-DevRunCache {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Position=0)]
+        [Parameter(Position = 0)]
         [string]$Name
     )
 
-    if ($Name) {
+    if ($Name)
+    {
         # Clear specific cache entry
         $removed = $null
-        if ($global:DevRunCache.TryRemove($Name, [ref]$removed)) {
+        if ( $global:DevRunCache.TryRemove($Name, [ref]$removed))
+        {
             Write-Host "Cleared cache for '$Name'" -ForegroundColor Green
         }
-        else {
+        else
+        {
             Write-Warning "No cache entry found for '$Name'"
         }
     }
-    else {
+    else
+    {
         # Clear all cache
         $count = $global:DevRunCache.Count
         $global:DevRunCache.Clear()
@@ -188,7 +206,8 @@ function Clear-DevRunCache {
     }
 }
 
-function Get-DevRunCacheStats {
+function Get-DevRunCacheStats
+{
     <#
     .SYNOPSIS
     Display DevRun cache statistics.
@@ -224,30 +243,42 @@ function Get-DevRunCacheStats {
 
     Write-Host "`nDevRun Cache Statistics" -ForegroundColor Cyan
     Write-Host "=======================" -ForegroundColor Cyan
-    Write-Host "Cached Streams: $($global:DevRunCache.Count)"
-    Write-Host "Script Registry: $($global:DevRunScripts.Count)"
+    Write-Host "Cached Streams: $( $global:DevRunCache.Count )"
+    Write-Host "Script Registry: $( $global:DevRunScripts.Count )"
     Write-Host ""
 
-    if ($global:DevRunCache.Count -gt 0) {
+    if ($global:DevRunCache.Count -gt 0)
+    {
         Write-Host "Cached Scripts:" -ForegroundColor Cyan
-        foreach ($key in ($global:DevRunCache.Keys | Sort-Object)) {
+        foreach ($key in ($global:DevRunCache.Keys | Sort-Object))
+        {
             Write-Host "  $key" -ForegroundColor White
         }
         Write-Host ""
     }
 
-    if ($global:DevRunScripts.Count -gt 0) {
+    if ($global:DevRunScripts.Count -gt 0)
+    {
         Write-Host "Registered Scripts:" -ForegroundColor Cyan
-        foreach ($key in ($global:DevRunScripts.Keys | Sort-Object)) {
+        foreach ($key in ($global:DevRunScripts.Keys | Sort-Object))
+        {
             $metadata = $global:DevRunScripts[$key]
-            $timestamp = if ($metadata.Timestamp) { $metadata.Timestamp } else { "unknown" }
+            $timestamp = if ($metadata.Timestamp)
+            {
+                $metadata.Timestamp
+            }
+            else
+            {
+                "unknown"
+            }
             Write-Host "  $key ($timestamp)" -ForegroundColor White
         }
         Write-Host ""
     }
 }
 
-function Add-DevScript {
+function Add-DevScript
+{
     <#
     .SYNOPSIS
     Register script metadata in $global:DevRunScripts registry.
@@ -286,10 +317,10 @@ function Add-DevScript {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory, Position=0)]
+        [Parameter(Mandatory, Position = 0)]
         [string]$Name,
 
-        [Parameter(Mandatory, Position=1)]
+        [Parameter(Mandatory, Position = 1)]
         [string]$Script,
 
         [Parameter()]
@@ -311,7 +342,8 @@ function Add-DevScript {
     Write-Host "Registered script '$Name'" -ForegroundColor Green
 }
 
-function Get-DevScripts {
+function Get-DevScripts
+{
     <#
     .SYNOPSIS
     List all registered scripts with metadata.
@@ -352,31 +384,43 @@ function Get-DevScripts {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Position=0)]
+        [Parameter(Position = 0)]
         [string]$Name,
 
         [Parameter()]
         [switch]$Detailed
     )
 
-    if ($global:DevRunScripts.Count -eq 0) {
+    if ($global:DevRunScripts.Count -eq 0)
+    {
         Write-Host "No scripts registered" -ForegroundColor Yellow
         return
     }
 
-    if ($Name) {
+    if ($Name)
+    {
         # Show specific script
         $metadata = $null
-        if ($global:DevRunScripts.TryGetValue($Name, [ref]$metadata)) {
-            if ($Detailed) {
+        if ( $global:DevRunScripts.TryGetValue($Name, [ref]$metadata))
+        {
+            if ($Detailed)
+            {
                 Write-Host "`nName: $Name" -ForegroundColor Cyan
-                Write-Host "Script: $($metadata.Script)"
-                Write-Host "Timestamp: $($metadata.Timestamp)"
-                Write-Host "ExitCode: $($metadata.ExitCode)"
-                $deps = if ($metadata.Dependencies.Count -gt 0) { $metadata.Dependencies -join ", " } else { "(none)" }
+                Write-Host "Script: $( $metadata.Script )"
+                Write-Host "Timestamp: $( $metadata.Timestamp )"
+                Write-Host "ExitCode: $( $metadata.ExitCode )"
+                $deps = if ($metadata.Dependencies.Count -gt 0)
+                {
+                    $metadata.Dependencies -join ", "
+                }
+                else
+                {
+                    "(none)"
+                }
                 Write-Host "Dependencies: $deps"
             }
-            else {
+            else
+            {
                 [PSCustomObject]@{
                     Name = $Name
                     Timestamp = $metadata.Timestamp
@@ -385,30 +429,42 @@ function Get-DevScripts {
                 }
             }
         }
-        else {
+        else
+        {
             Write-Warning "Script '$Name' not found in registry"
         }
         return
     }
 
     # Show all scripts
-    Write-Host "`nRegistered Scripts ($($global:DevRunScripts.Count))" -ForegroundColor Cyan
+    Write-Host "`nRegistered Scripts ($( $global:DevRunScripts.Count ))" -ForegroundColor Cyan
     Write-Host "=" * 50 -ForegroundColor Cyan
 
-    if ($Detailed) {
-        foreach ($key in ($global:DevRunScripts.Keys | Sort-Object)) {
+    if ($Detailed)
+    {
+        foreach ($key in ($global:DevRunScripts.Keys | Sort-Object))
+        {
             $metadata = $global:DevRunScripts[$key]
             Write-Host "`nName: $key" -ForegroundColor White
-            Write-Host "  Script: $($metadata.Script)" -ForegroundColor Gray
-            Write-Host "  Timestamp: $($metadata.Timestamp)" -ForegroundColor Gray
-            Write-Host "  ExitCode: $($metadata.ExitCode)" -ForegroundColor Gray
-            $deps = if ($metadata.Dependencies.Count -gt 0) { $metadata.Dependencies -join ", " } else { "(none)" }
+            Write-Host "  Script: $( $metadata.Script )" -ForegroundColor Gray
+            Write-Host "  Timestamp: $( $metadata.Timestamp )" -ForegroundColor Gray
+            Write-Host "  ExitCode: $( $metadata.ExitCode )" -ForegroundColor Gray
+            $deps = if ($metadata.Dependencies.Count -gt 0)
+            {
+                $metadata.Dependencies -join ", "
+            }
+            else
+            {
+                "(none)"
+            }
             Write-Host "  Dependencies: $deps" -ForegroundColor Gray
         }
         Write-Host ""
     }
-    else {
-        $scripts = foreach ($key in ($global:DevRunScripts.Keys | Sort-Object)) {
+    else
+    {
+        $scripts = foreach ($key in ($global:DevRunScripts.Keys | Sort-Object))
+        {
             $metadata = $global:DevRunScripts[$key]
             [PSCustomObject]@{
                 Name = $key
@@ -421,7 +477,8 @@ function Get-DevScripts {
     }
 }
 
-function Remove-DevScript {
+function Remove-DevScript
+{
     <#
     .SYNOPSIS
     Remove script from $global:DevRunScripts registry.
@@ -444,20 +501,23 @@ function Remove-DevScript {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory, Position=0)]
+        [Parameter(Mandatory, Position = 0)]
         [string]$Name
     )
 
     $removed = $null
-    if ($global:DevRunScripts.TryRemove($Name, [ref]$removed)) {
+    if ( $global:DevRunScripts.TryRemove($Name, [ref]$removed))
+    {
         Write-Host "Removed script '$Name' from registry" -ForegroundColor Green
     }
-    else {
+    else
+    {
         Write-Warning "Script '$Name' not found in registry"
     }
 }
 
-function Update-DevScriptMetadata {
+function Update-DevScriptMetadata
+{
     <#
     .SYNOPSIS
     Update metadata for registered script.
@@ -489,7 +549,7 @@ function Update-DevScriptMetadata {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory, Position=0)]
+        [Parameter(Mandatory, Position = 0)]
         [string]$Name,
 
         [Parameter()]
@@ -503,21 +563,25 @@ function Update-DevScriptMetadata {
     )
 
     $metadata = $null
-    if (-not $global:DevRunScripts.TryGetValue($Name, [ref]$metadata)) {
+    if (-not $global:DevRunScripts.TryGetValue($Name, [ref]$metadata))
+    {
         Write-Error "Script '$Name' not found in registry"
         return
     }
 
     # Update fields
-    if ($PSBoundParameters.ContainsKey('ExitCode')) {
+    if ( $PSBoundParameters.ContainsKey('ExitCode'))
+    {
         $metadata.ExitCode = $ExitCode
     }
 
-    if ($UpdateTimestamp) {
+    if ($UpdateTimestamp)
+    {
         $metadata.Timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     }
 
-    if ($PSBoundParameters.ContainsKey('Dependencies')) {
+    if ( $PSBoundParameters.ContainsKey('Dependencies'))
+    {
         $metadata.Dependencies = $Dependencies
     }
 
@@ -526,7 +590,8 @@ function Update-DevScriptMetadata {
     Write-Host "Updated metadata for script '$Name'" -ForegroundColor Green
 }
 
-function Invoke-DevScript {
+function Invoke-DevScript
+{
     <#
     .SYNOPSIS
     Execute a registered script from $global:DevRunScripts registry.
@@ -565,7 +630,7 @@ function Invoke-DevScript {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory, Position=0)]
+        [Parameter(Mandatory, Position = 0)]
         [string]$Name,
 
         [Parameter()]
@@ -577,36 +642,43 @@ function Invoke-DevScript {
 
     # Retrieve script from registry
     $metadata = $null
-    if (-not $global:DevRunScripts.TryGetValue($Name, [ref]$metadata)) {
+    if (-not $global:DevRunScripts.TryGetValue($Name, [ref]$metadata))
+    {
         Write-Error "Script '$Name' not found in registry. Use Add-DevScript to register it first."
         return
     }
 
-    Write-Verbose "Executing script '$Name': $($metadata.Script)"
+    Write-Verbose "Executing script '$Name': $( $metadata.Script )"
 
     # Execute script
-    try {
+    try
+    {
         $result = Invoke-Expression $metadata.Script
 
         # Update metadata if requested
-        if ($UpdateMetadata) {
+        if ($UpdateMetadata)
+        {
             Update-DevScriptMetadata -Name $Name -ExitCode $LASTEXITCODE -UpdateTimestamp
         }
 
         # Return result if requested
-        if ($PassThru) {
+        if ($PassThru)
+        {
             return $result
         }
     }
-    catch {
+    catch
+    {
         Write-Error "Failed to execute script '$Name': $_"
-        if ($UpdateMetadata) {
+        if ($UpdateMetadata)
+        {
             Update-DevScriptMetadata -Name $Name -ExitCode 1 -UpdateTimestamp
         }
     }
 }
 
-function Invoke-DevScriptChain {
+function Invoke-DevScriptChain
+{
     <#
     .SYNOPSIS
     Execute multiple registered scripts in sequence.
@@ -644,7 +716,7 @@ function Invoke-DevScriptChain {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory, Position=0)]
+        [Parameter(Mandatory, Position = 0)]
         [string[]]$Names,
 
         [Parameter()]
@@ -657,10 +729,12 @@ function Invoke-DevScriptChain {
     $results = @()
     $failedCount = 0
 
-    foreach ($name in $Names) {
+    foreach ($name in $Names)
+    {
         Write-Host "`nExecuting: $name" -ForegroundColor Cyan
 
-        try {
+        try
+        {
             Invoke-DevScript -Name $name -UpdateMetadata:$UpdateMetadata -ErrorAction Stop
 
             $results += [PSCustomObject]@{
@@ -670,17 +744,20 @@ function Invoke-DevScriptChain {
             }
 
             # Stop if failed and not continuing on error
-            if ($LASTEXITCODE -ne 0 -and -not $ContinueOnError) {
+            if ($LASTEXITCODE -ne 0 -and -not $ContinueOnError)
+            {
                 Write-Warning "Script '$name' failed with exit code $LASTEXITCODE. Stopping chain."
                 $failedCount++
                 break
             }
-            elseif ($LASTEXITCODE -ne 0) {
+            elseif ($LASTEXITCODE -ne 0)
+            {
                 Write-Warning "Script '$name' failed with exit code $LASTEXITCODE. Continuing..."
                 $failedCount++
             }
         }
-        catch {
+        catch
+        {
             Write-Error "Error executing '$name': $_"
 
             $results += [PSCustomObject]@{
@@ -691,7 +768,8 @@ function Invoke-DevScriptChain {
 
             $failedCount++
 
-            if (-not $ContinueOnError) {
+            if (-not $ContinueOnError)
+            {
                 Write-Warning "Stopping chain due to error."
                 break
             }
@@ -700,10 +778,17 @@ function Invoke-DevScriptChain {
 
     # Summary
     Write-Host "`nChain Summary:" -ForegroundColor Cyan
-    Write-Host "Total scripts: $($Names.Count)" -ForegroundColor White
-    Write-Host "Executed: $($results.Count)" -ForegroundColor White
-    Write-Host "Successful: $($results.Count - $failedCount)" -ForegroundColor Green
-    Write-Host "Failed: $failedCount" -ForegroundColor $(if ($failedCount -gt 0) { "Red" } else { "Green" })
+    Write-Host "Total scripts: $( $Names.Count )" -ForegroundColor White
+    Write-Host "Executed: $( $results.Count )" -ForegroundColor White
+    Write-Host "Successful: $( $results.Count - $failedCount )" -ForegroundColor Green
+    Write-Host "Failed: $failedCount" -ForegroundColor $( if ($failedCount -gt 0)
+    {
+        "Red"
+    }
+    else
+    {
+        "Green"
+    } )
 
     return $results
 }
