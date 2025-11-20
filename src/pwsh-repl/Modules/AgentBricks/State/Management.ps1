@@ -75,7 +75,7 @@ function Save-Project
     }
 }
 
-function Load-Project
+function Import-Project
 {
     <#
     .SYNOPSIS
@@ -96,11 +96,11 @@ function Load-Project
     Merge with existing patterns instead of replacing. Default is replace.
 
     .EXAMPLE
-    PS> Load-Project
+    PS> Import-Project
     Loaded 15 patterns from .brickyard.json
 
     .EXAMPLE
-    PS> Load-Project -Path "~/shared-patterns.json" -Merge
+    PS> Import-Project -Path "~/shared-patterns.json" -Merge
     # Merge patterns from shared library
 
     .NOTES
@@ -562,7 +562,7 @@ function Clear-Stored
         $patternCount = $global:BrickStore.Patterns.Count
         $global:BrickStore.Patterns.Clear()
         Write-Host "Cleared all patterns ($patternCount items)" -ForegroundColor Yellow
-        Write-Warning "All learned patterns removed! Use Load-Project to restore from .brickyard.json"
+        Write-Warning "All learned patterns removed! Use Import-Project to restore from .brickyard.json"
     }
 }
 
@@ -632,5 +632,202 @@ function Set-EnvironmentTee
         Set-Item "env:$Name" -Value ($items | Out-String)
         Write-Verbose "Stored $( $items.Count ) items to `$env:$Name"
         $items
+    }
+}
+
+function Invoke-CapturedProcess
+{
+    <#
+    .SYNOPSIS
+    Execute external process with full stdin/stdout/stderr capture.
+
+    .DESCRIPTION
+    Spawns external process (Python, Node, etc.) with bidirectional communication:
+    - Write to child process stdin
+    - Read child process stdout/stderr
+    - Capture exit code
+    - Store results in $global:DevRunCache or custom variable
+
+    Uses .NET Process class with stream redirection. More reliable than
+    per-session stdin pipes for direct process spawning scenarios.
+
+    .PARAMETER Command
+    Executable to run (python, node, dotnet, etc.).
+
+    .PARAMETER Arguments
+    Arguments passed to the executable. Can be string or array.
+
+    .PARAMETER StdinData
+    Data to write to process stdin. Supports multi-line strings.
+
+    .PARAMETER WorkingDirectory
+    Working directory for process execution. Defaults to current location.
+
+    .PARAMETER TimeoutSeconds
+    Maximum execution time in seconds. Process killed if exceeded.
+    Default: 60 seconds.
+
+    .PARAMETER StoreName
+    Variable name to store results. Defaults to $global:DevRunCache.
+    Creates hashtable with Stdout, Stderr, ExitCode keys.
+
+    .EXAMPLE
+    PS> Invoke-CapturedProcess -Command "python" -Arguments "-c","print('hello')"
+    Runs Python script, captures output in $global:DevRunCache
+
+    .EXAMPLE
+    PS> Invoke-CapturedProcess python "-c `"import sys; print(sys.stdin.read())`"" -StdinData "test input"
+    Sends stdin data to Python, captures echoed output
+
+    .EXAMPLE
+    PS> Invoke-CapturedProcess node script.js -WorkingDirectory "C:\project" -StoreName "node_output"
+    Runs Node script in specific directory, stores in $global:node_output
+
+    .EXAMPLE
+    PS> Invoke-CapturedProcess python long_script.py -TimeoutSeconds 300
+    Runs with 5 minute timeout instead of default 60 seconds
+
+    .NOTES
+    Returns hashtable: @{ Stdout = "..."; Stderr = "..."; ExitCode = 0 }
+    Process inherits environment variables from PowerShell session
+    Stdout/stderr captured separately for error analysis
+    Timeout kills process tree to prevent orphaned children
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, Position = 0)]
+        [string]$Command,
+
+        [Parameter(Position = 1)]
+        [object]$Arguments,
+
+        [Parameter()]
+        [string]$StdinData,
+
+        [Parameter()]
+        [string]$WorkingDirectory = (Get-Location).Path,
+
+        [Parameter()]
+        [int]$TimeoutSeconds = 60,
+
+        [Parameter()]
+        [string]$StoreName = "DevRunCache"
+    )
+
+    # Convert arguments to string if array
+    $argString = if ($Arguments -is [array])
+    {
+        $Arguments -join ' '
+    }
+    elseif ($Arguments)
+    {
+        $Arguments.ToString()
+    }
+    else
+    {
+        ""
+    }
+
+    # Create ProcessStartInfo with stream redirection
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $Command
+    $psi.Arguments = $argString
+    $psi.WorkingDirectory = $WorkingDirectory
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+
+    Write-Verbose "Starting: $Command $argString"
+    Write-Verbose "Working Directory: $WorkingDirectory"
+
+    try
+    {
+        # Start process
+        $process = New-Object System.Diagnostics.Process
+        $process.StartInfo = $psi
+        $process.Start() | Out-Null
+
+        # Write stdin if provided
+        if ($StdinData)
+        {
+            Write-Verbose "Writing $( $StdinData.Length ) characters to stdin"
+            $process.StandardInput.WriteLine($StdinData)
+        }
+        $process.StandardInput.Close()
+
+        # Wait with timeout
+        $completed = $process.WaitForExit($TimeoutSeconds * 1000)
+
+        if (-not $completed)
+        {
+            Write-Warning "Process exceeded timeout ($TimeoutSeconds seconds), killing..."
+            $process.Kill($true)  # Kill process tree
+            $timedOut = $true
+        }
+        else
+        {
+            $timedOut = $false
+        }
+
+        # Read output (must happen after WaitForExit)
+        $stdout = $process.StandardOutput.ReadToEnd()
+        $stderr = $process.StandardError.ReadToEnd()
+        $exitCode = $process.ExitCode
+
+        # Build result object
+        $result = @{
+            Stdout = $stdout
+            Stderr = $stderr
+            ExitCode = $exitCode
+            Command = $Command
+            Arguments = $argString
+            TimedOut = $timedOut
+            Duration = if ($process.ExitTime -and $process.StartTime)
+            {
+                ($process.ExitTime - $process.StartTime).TotalSeconds
+            }
+            else
+            {
+                $null
+            }
+        }
+
+        # Store result
+        Set-Variable -Name $StoreName -Value $result -Scope Global
+        Write-Verbose "Stored result in `$global:$StoreName"
+
+        # Display summary
+        Write-Host "Exit Code: $exitCode" -ForegroundColor $(if ($exitCode -eq 0) { 'Green' } else { 'Red' })
+        if ($timedOut)
+        {
+            Write-Host "Status: TIMEOUT (killed after $TimeoutSeconds seconds)" -ForegroundColor Red
+        }
+        if ($stdout)
+        {
+            Write-Host "`nStdout ($( $stdout.Length ) chars):"
+            Write-Host $stdout
+        }
+        if ($stderr)
+        {
+            Write-Host "`nStderr ($( $stderr.Length ) chars):" -ForegroundColor Yellow
+            Write-Host $stderr -ForegroundColor Yellow
+        }
+
+        # Return result
+        $result
+    }
+    catch
+    {
+        Write-Error "Failed to execute process: $_"
+        throw
+    }
+    finally
+    {
+        if ($process)
+        {
+            $process.Dispose()
+        }
     }
 }

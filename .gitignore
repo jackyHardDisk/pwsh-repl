@@ -42,3 +42,5 @@ archive/
 *deprecated*
 # Test output with environment variables
 test/output/
+src/pwsh-repl/Modules/LoraxMod/loraxmod/node_modules/
+src/pwsh-repl/Modules/LoraxMod/loraxmod/.git/
