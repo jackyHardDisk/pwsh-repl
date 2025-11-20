@@ -1,4 +1,5 @@
-function Invoke-WithTimeout {
+function Invoke-WithTimeout
+{
     <#
     .SYNOPSIS
         Execute a script block with a timeout, using PowerShell-conventional error handling.
@@ -130,7 +131,8 @@ function Invoke-WithTimeout {
 
     $startTime = Get-Date
 
-    try {
+    try
+    {
         # Wrap scriptblock to redirect stdin to prevent external process hangs
         # PowerShell jobs don't typically need this, but external processes (python, node, etc.) might
         $wrappedScriptBlock = {
@@ -149,31 +151,33 @@ function Invoke-WithTimeout {
 
         $duration = (Get-Date) - $startTime
 
-        if ($null -eq $completed) {
+        if ($null -eq $completed)
+        {
             # Timeout occurred - stop job and throw terminating error
             Stop-Job $job -ErrorAction SilentlyContinue
             Remove-Job $job -Force -ErrorAction SilentlyContinue
 
             $errorRecord = [System.Management.Automation.ErrorRecord]::new(
-                [System.TimeoutException]::new("Execution timeout after $TimeoutSeconds seconds (Duration: $($duration.TotalSeconds)s)"),
-                'ExecutionTimeout',
-                [System.Management.Automation.ErrorCategory]::OperationTimeout,
-                $ScriptBlock
+                    [System.TimeoutException]::new("Execution timeout after $TimeoutSeconds seconds (Duration: $( $duration.TotalSeconds )s)"),
+                    'ExecutionTimeout',
+                    [System.Management.Automation.ErrorCategory]::OperationTimeout,
+                    $ScriptBlock
             )
 
             $PSCmdlet.ThrowTerminatingError($errorRecord)
         }
 
         # Job completed - check for errors
-        if ($job.State -eq 'Failed') {
+        if ($job.State -eq 'Failed')
+        {
             $errorInfo = Receive-Job $job 2>&1 | Out-String
             Remove-Job $job -Force
 
             $errorRecord = [System.Management.Automation.ErrorRecord]::new(
-                [System.InvalidOperationException]::new($errorInfo.Trim()),
-                'ScriptBlockFailed',
-                [System.Management.Automation.ErrorCategory]::InvalidOperation,
-                $ScriptBlock
+                    [System.InvalidOperationException]::new($errorInfo.Trim()),
+                    'ScriptBlockFailed',
+                    [System.Management.Automation.ErrorCategory]::InvalidOperation,
+                    $ScriptBlock
             )
 
             $PSCmdlet.ThrowTerminatingError($errorRecord)
@@ -185,7 +189,8 @@ function Invoke-WithTimeout {
 
         return $output
     }
-    catch {
+    catch
+    {
         # Re-throw with proper attribution to calling code
         $PSCmdlet.ThrowTerminatingError($PSItem)
     }

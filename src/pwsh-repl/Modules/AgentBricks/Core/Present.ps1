@@ -1,4 +1,5 @@
-function Show {
+function Show
+{
     <#
     .SYNOPSIS
     Format and limit output with multiple format options.
@@ -84,27 +85,35 @@ function Show {
 
     end {
         # Apply Top limit if specified
-        if ($Top) {
+        if ($Top)
+        {
             $items = $items | Select-Object -First $Top
         }
 
         # Format based on requested format
-        switch ($Format) {
+        switch ($Format)
+        {
             'count' {
                 # Assume items have Count and Item properties
                 $items | ForEach-Object {
-                    if ($_.Count -and $_.Item) {
+                    if ($_.Count -and $_.Item)
+                    {
                         "{0,6}x: {1}" -f $_.Count, $_.Item
-                    } else {
+                    }
+                    else
+                    {
                         $_
                     }
                 }
             }
 
             'table' {
-                if ($AutoSize) {
+                if ($AutoSize)
+                {
                     $items | Format-Table -AutoSize | Out-String
-                } else {
+                }
+                else
+                {
                     $items | Format-Table | Out-String
                 }
             }
@@ -120,7 +129,8 @@ function Show {
     }
 }
 
-function Export-ToFile {
+function Export-ToFile
+{
     <#
     .SYNOPSIS
     Save results to file in various formats.
@@ -196,24 +206,36 @@ function Export-ToFile {
         $items = @()
 
         # Auto-detect format from extension
-        if ($Format -eq 'auto') {
+        if ($Format -eq 'auto')
+        {
             $extension = [System.IO.Path]::GetExtension($Path).ToLower()
-            $Format = switch ($extension) {
-                '.csv' { 'csv' }
-                '.json' { 'json' }
-                '.xml' { 'xml' }
-                default { 'text' }
+            $Format = switch ($extension)
+            {
+                '.csv' {
+                    'csv'
+                }
+                '.json' {
+                    'json'
+                }
+                '.xml' {
+                    'xml'
+                }
+                default {
+                    'text'
+                }
             }
         }
 
         # Ensure parent directory exists
         $parentDir = Split-Path $Path -Parent
-        if ($parentDir -and -not (Test-Path $parentDir)) {
+        if ($parentDir -and -not (Test-Path $parentDir))
+        {
             New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
         }
 
         # Check NoClobber
-        if ($NoClobber -and (Test-Path $Path)) {
+        if ($NoClobber -and (Test-Path $Path))
+        {
             Write-Error "File already exists and -NoClobber specified: $Path"
             return
         }
@@ -225,11 +247,15 @@ function Export-ToFile {
 
     end {
         # Export based on format
-        switch ($Format) {
+        switch ($Format)
+        {
             'text' {
-                if ($Append) {
+                if ($Append)
+                {
                     $items | Out-String | Add-Content -Path $Path
-                } else {
+                }
+                else
+                {
                     $items | Out-String | Set-Content -Path $Path
                 }
             }
@@ -247,12 +273,13 @@ function Export-ToFile {
             }
         }
 
-        Write-Verbose "Exported $($items.Count) items to $Path as $Format"
+        Write-Verbose "Exported $( $items.Count ) items to $Path as $Format"
         Get-Item $Path
     }
 }
 
-function Get-StreamData {
+function Get-StreamData
+{
     <#
     .SYNOPSIS
     Retrieve specific stream data from dev_run JSON storage with caching.
@@ -307,11 +334,11 @@ function Get-StreamData {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory, Position=0)]
+        [Parameter(Mandatory, Position = 0)]
         [string]$Name,
 
-        [Parameter(Mandatory, Position=1)]
-        [ValidateSet("Error","Warning","Verbose","Debug","Information","Output")]
+        [Parameter(Mandatory, Position = 1)]
+        [ValidateSet("Error", "Warning", "Verbose", "Debug", "Information", "Output")]
         [string]$Stream,
 
         [Parameter()]
@@ -319,7 +346,8 @@ function Get-StreamData {
     )
 
     # Use cached implementation if available (provides ~10-100x performance boost)
-    if (Get-Command Get-CachedStreamData -ErrorAction SilentlyContinue) {
+    if (Get-Command Get-CachedStreamData -ErrorAction SilentlyContinue)
+    {
         return Get-CachedStreamData -Name $Name -Stream $Stream -Force:$Force
     }
 
@@ -327,26 +355,32 @@ function Get-StreamData {
     $envVarName = "${Name}_streams"
     $json = Get-Item "env:$envVarName" -ErrorAction SilentlyContinue
 
-    if (-not $json) {
+    if (-not $json)
+    {
         Write-Error "No stream data found for '$Name'. Run dev_run with name='$Name' first."
         return
     }
 
-    try {
+    try
+    {
         $data = $json.Value | ConvertFrom-Json -AsHashtable
-        if ($data.ContainsKey($Stream)) {
+        if ( $data.ContainsKey($Stream))
+        {
             $data[$Stream]
         }
-        else {
+        else
+        {
             Write-Warning "Stream '$Stream' not found in $envVarName"
         }
     }
-    catch {
+    catch
+    {
         Write-Error "Failed to parse JSON from $envVarName : $_"
     }
 }
 
-function Show-StreamSummary {
+function Show-StreamSummary
+{
     <#
     .SYNOPSIS
     Display formatted summary of dev_run stream data.
@@ -391,27 +425,32 @@ function Show-StreamSummary {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory, Position=0)]
+        [Parameter(Mandatory, Position = 0)]
         [string]$Name,
 
         [Parameter()]
-        [ValidateSet("Error","Warning","Verbose","Debug","Information","Output")]
+        [ValidateSet("Error", "Warning", "Verbose", "Debug", "Information", "Output")]
         [string[]]$Streams = @("Error", "Warning"),
 
         [Parameter()]
         [int]$TopCount = 5
     )
 
-    foreach ($stream in $Streams) {
+    foreach ($stream in $Streams)
+    {
         $items = Get-StreamData -Name $Name -Stream $stream
-        if (-not $items -or $items.Count -eq 0) { continue }
+        if (-not $items -or $items.Count -eq 0)
+        {
+            continue
+        }
 
         $unique = ($items | Select-Object -Unique).Count
-        Write-Host "`n${stream}s: $($items.Count) ($unique unique)" -ForegroundColor Cyan
+        Write-Host "`n${stream}s: $( $items.Count ) ($unique unique)" -ForegroundColor Cyan
 
         # Frequency analysis
         $freq = $items | Measure-Frequency | Select-Object -First $TopCount
-        if ($freq) {
+        if ($freq)
+        {
             Write-Host "`nTop ${stream}s:" -ForegroundColor Cyan
             $freq | Format-Count
         }

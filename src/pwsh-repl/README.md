@@ -1,10 +1,12 @@
 # PowerShell Persistent MCP Server
 
-Provides persistent PowerShell environment through MCP protocol - variables and state persist across tool calls.
+Provides persistent PowerShell environment through MCP protocol - variables and state
+persist across tool calls.
 
 ## Architecture
 
 **Pattern**: Channel-based pool (from PowerAuger `BackgroundProcessor.cs`)
+
 - Pool of 4 PowerShell instances, each with persistent Runspace
 - Thread-safe via `Channel<T>` (no locks)
 - Async-native for MCP stdio protocol
@@ -12,23 +14,28 @@ Provides persistent PowerShell environment through MCP protocol - variables and 
 ## Key Components
 
 ### Core/PowerShellPool.cs
+
 Channel-based object pool for PowerShell instances.
 
 ### Tools/PwshTool.cs
+
 Execute PowerShell scripts with state persistence.
 
 ### Utils/StreamCollector.cs
+
 Collect all 6 PowerShell streams (Output, Error, Warning, Verbose, Debug, Information).
 
 ## Critical Patterns from Research
 
 ### 1. Stream Clearing (prevents error accumulation)
+
 ```csharp
 session.PowerShell.Commands.Clear();
 session.PowerShell.Streams.ClearStreams();  // CRITICAL!
 ```
 
 ### 2. Channel Pattern (not locks)
+
 ```csharp
 var pool = Channel.CreateUnbounded<PowerShellSession>();
 var session = await pool.Reader.ReadAsync(ct);  // Async checkout
@@ -36,6 +43,7 @@ pool.Writer.TryWrite(session);  // Non-blocking checkin
 ```
 
 ### 3. Module Pre-loading
+
 ```csharp
 ps.AddScript(@"
     Import-Module Microsoft.PowerShell.Management -ErrorAction SilentlyContinue
@@ -44,6 +52,7 @@ ps.AddScript(@"
 ```
 
 ### 4. Output Formatting (prevent truncation)
+
 ```csharp
 ps.AddCommand("Out-String");
 ps.AddParameter("Width", 250);

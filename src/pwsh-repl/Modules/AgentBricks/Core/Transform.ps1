@@ -1,4 +1,5 @@
-function Format-Count {
+function Format-Count
+{
     <#
     .SYNOPSIS
     Format items with count prefix.
@@ -46,21 +47,25 @@ function Format-Count {
 
     process {
         # Check for Count property (from Measure-Frequency)
-        if ($null -ne $InputObject.Count -and $null -ne $InputObject.Item) {
+        if ($null -ne $InputObject.Count -and $null -ne $InputObject.Item)
+        {
             "{0,$Width}x: {1}" -f $InputObject.Count, $InputObject.Item
         }
         # Check for Count and Name (from Group-Object)
-        elseif ($null -ne $InputObject.Count -and $null -ne $InputObject.Name) {
+        elseif ($null -ne $InputObject.Count -and $null -ne $InputObject.Name)
+        {
             "{0,$Width}x: {1}" -f $InputObject.Count, $InputObject.Name
         }
         # Pass through other objects unchanged
-        else {
+        else
+        {
             $InputObject
         }
     }
 }
 
-function Group-By {
+function Group-By
+{
     <#
     .SYNOPSIS
     Group objects by property value.
@@ -122,16 +127,22 @@ function Group-By {
     }
 
     end {
-        if ($Property) {
+        if ($Property)
+        {
             $grouped = $items | Group-Object -Property $Property
-        } else {
+        }
+        else
+        {
             # Group by the item itself (for simple strings/values)
             $grouped = $items | Group-Object
         }
 
-        if ($NoSort) {
+        if ($NoSort)
+        {
             $result = $grouped
-        } else {
+        }
+        else
+        {
             $result = $grouped | Sort-Object Count -Descending
         }
 
@@ -139,14 +150,22 @@ function Group-By {
         $result | ForEach-Object {
             [PSCustomObject]@{
                 Count = $_.Count
-                Item = if ($Property) { $_.Name } else { $_.Name }
+                Item = if ($Property)
+                {
+                    $_.Name
+                }
+                else
+                {
+                    $_.Name
+                }
                 Group = $_.Group
             }
         }
     }
 }
 
-function Measure-Frequency {
+function Measure-Frequency
+{
     <#
     .SYNOPSIS
     Count occurrences and sort by frequency.
@@ -219,15 +238,21 @@ function Measure-Frequency {
     }
 
     end {
-        if ($Property) {
+        if ($Property)
+        {
             $grouped = $items | Group-Object -Property $Property
-        } else {
+        }
+        else
+        {
             $grouped = $items | Group-Object
         }
 
-        if ($Ascending) {
+        if ($Ascending)
+        {
             $result = $grouped | Sort-Object Count
-        } else {
+        }
+        else
+        {
             $result = $grouped | Sort-Object Count -Descending
         }
 
@@ -242,7 +267,8 @@ function Measure-Frequency {
     }
 }
 
-function Get-JaroWinklerDistance {
+function Get-JaroWinklerDistance
+{
     <#
     .SYNOPSIS
     Calculate Jaro-Winkler similarity distance between two strings.
@@ -275,15 +301,21 @@ function Get-JaroWinklerDistance {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory, Position=0)]
+        [Parameter(Mandatory, Position = 0)]
         [string]$String1,
 
-        [Parameter(Mandatory, Position=1)]
+        [Parameter(Mandatory, Position = 1)]
         [string]$String2
     )
 
-    if ($String1 -eq $String2) { return 1.0 }
-    if ($String1.Length -eq 0 -or $String2.Length -eq 0) { return 0.0 }
+    if ($String1 -eq $String2)
+    {
+        return 1.0
+    }
+    if ($String1.Length -eq 0 -or $String2.Length -eq 0)
+    {
+        return 0.0
+    }
 
     $matchDistance = [Math]::Floor([Math]::Max($String1.Length, $String2.Length) / 2) - 1
     $s1Matches = @($false) * $String1.Length
@@ -296,7 +328,10 @@ function Get-JaroWinklerDistance {
         $end = [Math]::Min($i + $matchDistance + 1, $String2.Length)
 
         for ($j = $start; $j -lt $end; $j++) {
-            if ($s2Matches[$j] -or $String1[$i] -ne $String2[$j]) { continue }
+            if ($s2Matches[$j] -or $String1[$i] -ne $String2[$j])
+            {
+                continue
+            }
             $s1Matches[$i] = $true
             $s2Matches[$j] = $true
             $matches++
@@ -304,27 +339,47 @@ function Get-JaroWinklerDistance {
         }
     }
 
-    if ($matches -eq 0) { return 0.0 }
+    if ($matches -eq 0)
+    {
+        return 0.0
+    }
 
     $k = 0
     for ($i = 0; $i -lt $String1.Length; $i++) {
-        if (-not $s1Matches[$i]) { continue }
-        while (-not $s2Matches[$k]) { $k++ }
-        if ($String1[$i] -ne $String2[$k]) { $transpositions++ }
+        if (-not $s1Matches[$i])
+        {
+            continue
+        }
+        while (-not $s2Matches[$k])
+        {
+            $k++
+        }
+        if ($String1[$i] -ne $String2[$k])
+        {
+            $transpositions++
+        }
         $k++
     }
 
     $jaro = ($matches / $String1.Length + $matches / $String2.Length + ($matches - $transpositions/2) / $matches) / 3
 
     $prefix = 0
-    for ($i = 0; $i -lt [Math]::Min(4, [Math]::Min($String1.Length, $String2.Length)); $i++) {
-        if ($String1[$i] -eq $String2[$i]) { $prefix++ } else { break }
+    for ($i = 0; $i -lt [Math]::Min(4,[Math]::Min($String1.Length, $String2.Length)); $i++) {
+        if ($String1[$i] -eq $String2[$i])
+        {
+            $prefix++
+        }
+        else
+        {
+            break
+        }
     }
 
     return $jaro + ($prefix * 0.1 * (1 - $jaro))
 }
 
-function Group-Similar {
+function Group-Similar
+{
     <#
     .SYNOPSIS
     Group similar items using fuzzy string matching.
@@ -393,15 +448,32 @@ function Group-Similar {
     end {
         $groups = @()
 
-        foreach ($item in $items) {
-            $compareText = if ($Property) { $item.$Property } else { $item.ToString() }
+        foreach ($item in $items)
+        {
+            $compareText = if ($Property)
+            {
+                $item.$Property
+            }
+            else
+            {
+                $item.ToString()
+            }
             $foundGroup = $false
 
-            foreach ($group in $groups) {
-                $exemplar = if ($Property) { $group.Exemplar.$Property } else { $group.Exemplar.ToString() }
+            foreach ($group in $groups)
+            {
+                $exemplar = if ($Property)
+                {
+                    $group.Exemplar.$Property
+                }
+                else
+                {
+                    $group.Exemplar.ToString()
+                }
                 $similarity = Get-JaroWinklerDistance $compareText $exemplar
 
-                if ($similarity -ge $Threshold) {
+                if ($similarity -ge $Threshold)
+                {
                     $group.Items += $item
                     $group.Count++
                     $foundGroup = $true
@@ -409,7 +481,8 @@ function Group-Similar {
                 }
             }
 
-            if (-not $foundGroup) {
+            if (-not $foundGroup)
+            {
                 $groups += [PSCustomObject]@{
                     Exemplar = $item
                     Count = 1
@@ -428,7 +501,8 @@ function Group-Similar {
     }
 }
 
-function Group-BuildErrors {
+function Group-BuildErrors
+{
     <#
     .SYNOPSIS
     Group build errors by code and similar messages using pattern extraction.
@@ -492,23 +566,27 @@ function Group-BuildErrors {
 
     end {
         $patternObj = Get-Patterns -Name $Pattern
-        if (-not $patternObj) {
+        if (-not $patternObj)
+        {
             Write-Error "Pattern '$Pattern' not found. Use Get-Patterns to see available patterns."
             return
         }
 
         $extracted = $items | Extract-Regex -Pattern $patternObj.Pattern
-        if (-not $extracted) {
+        if (-not $extracted)
+        {
             Write-Warning "No matches found for pattern '$Pattern'"
             return
         }
 
         $codeGroups = $extracted | Group-Object code
 
-        foreach ($codeGroup in $codeGroups) {
+        foreach ($codeGroup in $codeGroups)
+        {
             $messageGroups = $codeGroup.Group | Group-Similar -Property message -Threshold $Threshold
 
-            foreach ($msgGroup in $messageGroups) {
+            foreach ($msgGroup in $messageGroups)
+            {
                 $files = ($msgGroup.Items.file | Select-Object -Unique).Count
 
                 [PSCustomObject]@{

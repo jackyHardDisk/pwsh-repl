@@ -1,4 +1,5 @@
-function Extract-Regex {
+function Extract-Regex
+{
     <#
     .SYNOPSIS
     Extract data using regular expressions with named groups.
@@ -73,30 +74,50 @@ function Extract-Regex {
     process {
         $text = $InputObject.ToString()
 
-        if ($All) {
+        if ($All)
+        {
             $matches = [regex]::Matches($text, $Pattern)
-        } else {
+        }
+        else
+        {
             $match = [regex]::Match($text, $Pattern)
-            $matches = if ($match.Success) { @($match) } else { @() }
+            $matches = if ($match.Success)
+            {
+                @($match)
+            }
+            else
+            {
+                @()
+            }
         }
 
-        foreach ($match in $matches) {
-            if ($match.Success) {
+        foreach ($match in $matches)
+        {
+            if ($match.Success)
+            {
                 # If specific group requested, return just that value
-                if ($Group) {
-                    if ($match.Groups[$Group].Success) {
+                if ($Group)
+                {
+                    if ($match.Groups[$Group].Success)
+                    {
                         $match.Groups[$Group].Value
                     }
                 }
                 # Otherwise, build object from all named groups
-                else {
-                    $result = [ordered]@{}
-                    foreach ($groupName in $match.Groups.Keys) {
+                else
+                {
+                    $result = [ordered]@{ }
+                    foreach ($groupName in $match.Groups.Keys)
+                    {
                         # Skip numeric groups (positional captures)
-                        if ($groupName -match '^\d+$') { continue }
+                        if ($groupName -match '^\d+$')
+                        {
+                            continue
+                        }
                         $result[$groupName] = $match.Groups[$groupName].Value
                     }
-                    if ($result.Count -gt 0) {
+                    if ($result.Count -gt 0)
+                    {
                         [PSCustomObject]$result
                     }
                 }
@@ -105,7 +126,8 @@ function Extract-Regex {
     }
 }
 
-function Extract-Between {
+function Extract-Between
+{
     <#
     .SYNOPSIS
     Extract text between two marker strings.
@@ -180,25 +202,33 @@ function Extract-Between {
         $endEscaped = [regex]::Escape($End)
 
         # Build pattern (non-greedy by default)
-        if ($Greedy) {
+        if ($Greedy)
+        {
             $pattern = "$startEscaped(.*)$endEscaped"
-        } else {
+        }
+        else
+        {
             $pattern = "$startEscaped(.*?)$endEscaped"
         }
 
         $match = [regex]::Match($InputObject, $pattern)
 
-        if ($match.Success) {
-            if ($IncludeMarkers) {
+        if ($match.Success)
+        {
+            if ($IncludeMarkers)
+            {
                 $match.Value
-            } else {
+            }
+            else
+            {
                 $match.Groups[1].Value
             }
         }
     }
 }
 
-function Extract-Column {
+function Extract-Column
+{
     <#
     .SYNOPSIS
     Extract Nth column from delimited text.
@@ -266,18 +296,25 @@ function Extract-Column {
         $columns = $InputObject -split $Delimiter
 
         # Handle negative indexing
-        $index = if ($Column -lt 0) {
+        $index = if ($Column -lt 0)
+        {
             $columns.Length + $Column
-        } else {
+        }
+        else
+        {
             $Column - 1  # Convert 1-indexed to 0-indexed
         }
 
         # Check bounds
-        if ($index -ge 0 -and $index -lt $columns.Length) {
+        if ($index -ge 0 -and $index -lt $columns.Length)
+        {
             $value = $columns[$index]
-            if ($Trim) {
+            if ($Trim)
+            {
                 $value.Trim()
-            } else {
+            }
+            else
+            {
                 $value
             }
         }

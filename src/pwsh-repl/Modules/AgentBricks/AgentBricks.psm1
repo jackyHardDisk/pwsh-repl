@@ -3,9 +3,9 @@
 
 # Initialize BrickStore (global state)
 $global:BrickStore = @{
-    Results = @{}     # Stored results from dev-run and analysis
-    Patterns = @{}    # Learned regex patterns for tool output
-    Chains = @{}      # Saved analysis pipelines (future enhancement)
+    Results = @{ }     # Stored results from dev-run and analysis
+    Patterns = @{ }    # Learned regex patterns for tool output
+    Chains = @{ }      # Saved analysis pipelines (future enhancement)
 }
 
 # Dot-source all function files
@@ -32,12 +32,15 @@ $global:BrickStore = @{
 . $PSScriptRoot/Patterns/Build.ps1
 
 # Auto-load project knowledge if .brickyard.json exists in current directory
-if (Test-Path ".brickyard.json") {
-    try {
+if (Test-Path ".brickyard.json")
+{
+    try
+    {
         Load-Project -Path ".brickyard.json" -ErrorAction SilentlyContinue
         Write-Verbose "Loaded project patterns from .brickyard.json"
     }
-    catch {
+    catch
+    {
         # Silently continue if load fails
     }
 }

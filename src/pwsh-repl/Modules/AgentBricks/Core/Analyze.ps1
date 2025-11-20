@@ -1,4 +1,5 @@
-function Find-Errors {
+function Find-Errors
+{
     <#
     .SYNOPSIS
     Extract and count errors from text output.
@@ -71,8 +72,10 @@ function Find-Errors {
     }
 
     process {
-        if ($PSCmdlet.ParameterSetName -eq 'Pipeline') {
-            if ($InputObject) {
+        if ($PSCmdlet.ParameterSetName -eq 'Pipeline')
+        {
+            if ($InputObject)
+            {
                 $lines += $InputObject.ToString()
             }
         }
@@ -80,17 +83,28 @@ function Find-Errors {
 
     end {
         # Read from file if Source parameter used
-        if ($Source) {
-            if (Test-Path $Source) {
+        if ($Source)
+        {
+            if (Test-Path $Source)
+            {
                 $lines = Get-Content $Source
-            } else {
+            }
+            else
+            {
                 Write-Error "File not found: $Source"
                 return
             }
         }
 
         # Filter lines matching error pattern
-        $options = if ($CaseSensitive) { 'None' } else { 'IgnoreCase' }
+        $options = if ($CaseSensitive)
+        {
+            'None'
+        }
+        else
+        {
+            'IgnoreCase'
+        }
         $errors = $lines | Where-Object {
             $_ -match $Pattern
         } | Where-Object {
@@ -110,15 +124,19 @@ function Find-Errors {
         }
 
         # Apply Top filter if specified
-        if ($Top) {
+        if ($Top)
+        {
             $formatted | Select-Object -First $Top
-        } else {
+        }
+        else
+        {
             $formatted
         }
     }
 }
 
-function Find-Warnings {
+function Find-Warnings
+{
     <#
     .SYNOPSIS
     Extract and count warnings from text output.
@@ -186,8 +204,10 @@ function Find-Warnings {
     }
 
     process {
-        if ($PSCmdlet.ParameterSetName -eq 'Pipeline') {
-            if ($InputObject) {
+        if ($PSCmdlet.ParameterSetName -eq 'Pipeline')
+        {
+            if ($InputObject)
+            {
                 $lines += $InputObject.ToString()
             }
         }
@@ -195,17 +215,28 @@ function Find-Warnings {
 
     end {
         # Read from file if Source parameter used
-        if ($Source) {
-            if (Test-Path $Source) {
+        if ($Source)
+        {
+            if (Test-Path $Source)
+            {
                 $lines = Get-Content $Source
-            } else {
+            }
+            else
+            {
                 Write-Error "File not found: $Source"
                 return
             }
         }
 
         # Filter lines matching warning pattern
-        $options = if ($CaseSensitive) { 'None' } else { 'IgnoreCase' }
+        $options = if ($CaseSensitive)
+        {
+            'None'
+        }
+        else
+        {
+            'IgnoreCase'
+        }
         $warnings = $lines | Where-Object {
             $_ -match $Pattern
         } | Where-Object {
@@ -224,15 +255,19 @@ function Find-Warnings {
         }
 
         # Apply Top filter if specified
-        if ($Top) {
+        if ($Top)
+        {
             $formatted | Select-Object -First $Top
-        } else {
+        }
+        else
+        {
             $formatted
         }
     }
 }
 
-function Parse-BuildOutput {
+function Parse-BuildOutput
+{
     <#
     .SYNOPSIS
     Parse build errors from common build tools (MSBuild, GCC, CMake, etc.).
@@ -308,8 +343,10 @@ function Parse-BuildOutput {
     }
 
     process {
-        if ($PSCmdlet.ParameterSetName -eq 'Pipeline') {
-            if ($InputObject) {
+        if ($PSCmdlet.ParameterSetName -eq 'Pipeline')
+        {
+            if ($InputObject)
+            {
                 $lines += $InputObject.ToString()
             }
         }
@@ -317,32 +354,42 @@ function Parse-BuildOutput {
 
     end {
         # Read from file if Source parameter used
-        if ($Source) {
-            if (Test-Path $Source) {
+        if ($Source)
+        {
+            if (Test-Path $Source)
+            {
                 $lines = Get-Content $Source
-            } else {
+            }
+            else
+            {
                 Write-Error "File not found: $Source"
                 return
             }
         }
 
         # Auto-detect tool type if needed
-        if ($ToolType -eq 'Auto') {
+        if ($ToolType -eq 'Auto')
+        {
             $sample = $lines | Select-Object -First 100 | Out-String
 
-            if ($sample -match '\(\d+,\d+\):\s*error') {
+            if ($sample -match '\(\d+,\d+\):\s*error')
+            {
                 $ToolType = 'MSBuild'
             }
-            elseif ($sample -match ':\d+:\d+:\s*error:') {
+            elseif ($sample -match ':\d+:\d+:\s*error:')
+            {
                 $ToolType = 'GCC'
             }
-            elseif ($sample -match 'CMake Error') {
+            elseif ($sample -match 'CMake Error')
+            {
                 $ToolType = 'CMake'
             }
-            elseif ($sample -match '\[ERROR\]') {
+            elseif ($sample -match '\[ERROR\]')
+            {
                 $ToolType = 'Maven'
             }
-            else {
+            else
+            {
                 # Default to GCC-style as most common
                 $ToolType = 'GCC'
             }
@@ -351,19 +398,39 @@ function Parse-BuildOutput {
         $pattern = $patterns[$ToolType]
 
         # Parse each line
-        foreach ($line in $lines) {
-            if ($line -match $pattern) {
+        foreach ($line in $lines)
+        {
+            if ($line -match $pattern)
+            {
                 $result = [ordered]@{
                     ToolType = $ToolType
                 }
 
                 # Extract available fields based on named groups
-                if ($Matches['file']) { $result['File'] = $Matches['file'] }
-                if ($Matches['line']) { $result['Line'] = [int]$Matches['line'] }
-                if ($Matches['col']) { $result['Col'] = [int]$Matches['col'] }
-                if ($Matches['code']) { $result['Code'] = $Matches['code'] }
-                if ($Matches['function']) { $result['Function'] = $Matches['function'] }
-                if ($Matches['message']) { $result['Message'] = $Matches['message'].Trim() }
+                if ($Matches['file'])
+                {
+                    $result['File'] = $Matches['file']
+                }
+                if ($Matches['line'])
+                {
+                    $result['Line'] = [int]$Matches['line']
+                }
+                if ($Matches['col'])
+                {
+                    $result['Col'] = [int]$Matches['col']
+                }
+                if ($Matches['code'])
+                {
+                    $result['Code'] = $Matches['code']
+                }
+                if ($Matches['function'])
+                {
+                    $result['Function'] = $Matches['function']
+                }
+                if ($Matches['message'])
+                {
+                    $result['Message'] = $Matches['message'].Trim()
+                }
 
                 [PSCustomObject]$result
             }

@@ -1,5 +1,5 @@
 @{
-    # Script module or binary module file associated with this manifest
+# Script module or binary module file associated with this manifest
     RootModule = 'AgentBricks.psm1'
 
     # Version number of this module
@@ -28,7 +28,7 @@
 
     # Functions to export from this module
     FunctionsToExport = @(
-        # Transform
+    # Transform
         'Format-Count',
         'Group-By',
         'Measure-Frequency',
@@ -90,7 +90,7 @@
     # Private data to pass to the module specified in RootModule/ModuleToProcess
     PrivateData = @{
         PSData = @{
-            # Tags applied to this module
+        # Tags applied to this module
             Tags = @('Development', 'Build', 'Testing', 'Linting', 'Analysis', 'Agent', 'AI')
 
             # A URL to the license for this module
