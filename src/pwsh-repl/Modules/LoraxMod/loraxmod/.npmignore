@@ -1,0 +1,7 @@
+# Exclude build tools from npm package
+emsdk/
+build/
+*.md
+!README.md
+.git/
+.gitignore
