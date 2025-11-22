@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build artifacts
+build/temp/
+
+# Build toolchain (install to C:\tools\emsdk or ~/emsdk instead)
+emsdk/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test files
+test/
+*.test.js
+
+# Logs
+*.log
+npm-debug.log*
