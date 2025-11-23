@@ -14,7 +14,7 @@ var builder = Host.CreateEmptyApplicationBuilder(null);
 builder.Services.AddSingleton<SessionManager>();
 
 // Register resource provider
-builder.Services.AddSingleton<PowerShellModuleResourceProvider>();
+builder.Services.AddSingleton<ResourceProvider>();
 
 // Configure MCP server with stdio transport
 builder.Services
