@@ -107,11 +107,8 @@ public class SessionManager : IDisposable
         LoadModule(pwsh, "Base",
             Path.Combine(AppContext.BaseDirectory, "Modules", "Base"));
 
-        // Pre-load AgentBricks module (depends on Base)
-        LoadModule(pwsh, "AgentBricks",
-            Path.Combine(AppContext.BaseDirectory, "Modules", "AgentBricks"), true);
-
-        // Load additional modules from config
+        // Load additional modules from PWSH_MCP_MODULES environment variable
+        // (includes AgentBricks, LoraxMod, SessionLog, TokenCounter, etc.)
         LoadAdditionalModules(pwsh);
 
         // Initialize ConcurrentDictionary for DevRun cache (in C# for thread-safety)
