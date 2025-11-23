@@ -28,79 +28,114 @@ public class PowerShellModuleResourceProvider
     [Description("Overview of all loaded PowerShell modules with quick reference")]
     public string GetOverview()
     {
-        return @"# PowerShell MCP Server - Module Overview
+        var session = _sessionManager.GetOrCreateSession("resource_temp");
 
-## Available Modules
+        try
+        {
+            // Check which modules are installed
+            session.PowerShell.AddScript(@"
+$modules = @{}
+Get-Module | ForEach-Object { $modules[$_.Name] = $true }
+$modules
+");
+            var results = session.PowerShell.Invoke();
+            session.PowerShell.Commands.Clear();
+            session.PowerShell.Streams.ClearStreams();
 
-**Base** (40 functions) - Foundation module for core execution, transformation, and state management
-- Execution: Invoke-DevRun, Get-DevRunOutput, Invoke-WithTimeout
-- Transform: Format-Count, Group-By, Measure-Frequency, Group-Similar, Group-BuildErrors
-- Extract: Select-RegexMatch, Select-TextBetween, Select-Column
-- Analyze: Find-Errors, Find-Warnings, Get-BuildError
-- State: Save-Project, Import-Project, Get-BrickStore, Export-Environment
-- Cache: Get-CachedStreamData, Clear-DevRunCache, Get-DevRunCacheStats
-- Background: Invoke-BackgroundProcess, Stop-BackgroundProcess, Get-BackgroundData
+            var installedModules = new HashSet<string>();
+            if (results.Count > 0 && results[0].BaseObject is System.Collections.Hashtable ht)
+            {
+                foreach (var key in ht.Keys)
+                {
+                    installedModules.Add(key.ToString()!);
+                }
+            }
 
-**AgentBricks** (5 functions) - Pattern learning and meta-discovery
-- Patterns: Get-Patterns, Set-Pattern, Test-Pattern, Register-OutputPattern
-- Discovery: Find-ProjectTools
-- Pre-configured: 43 patterns for JavaScript, Python, .NET, Build tools
+            var overview = new StringBuilder();
+            overview.AppendLine("# PowerShell MCP Server - Module Overview");
+            overview.AppendLine();
+            overview.AppendLine("## Available Modules");
+            overview.AppendLine();
 
-**LoraxMod** (7 functions) - Tree-sitter AST parsing for 12 languages
-- Streaming: Start-LoraxStreamParser, Invoke-LoraxStreamQuery, Stop-LoraxStreamParser
-- Analysis: Find-FunctionCalls, Get-IncludeDependencies
-- Interactive: Start-TreeSitterSession
+            // Base module
+            if (installedModules.Contains("Base"))
+            {
+                overview.AppendLine("**Base** (40 functions) - Foundation module for core execution, transformation, and state management");
+                overview.AppendLine("- Execution: Invoke-DevRun, Get-DevRunOutput, Invoke-WithTimeout");
+                overview.AppendLine("- Transform: Format-Count, Group-By, Measure-Frequency, Group-Similar, Group-BuildErrors");
+                overview.AppendLine("- Extract: Select-RegexMatch, Select-TextBetween, Select-Column");
+                overview.AppendLine("- Analyze: Find-Errors, Find-Warnings, Get-BuildError");
+                overview.AppendLine("- State: Save-Project, Import-Project, Get-BrickStore, Export-Environment");
+                overview.AppendLine("- Cache: Get-CachedStreamData, Clear-DevRunCache, Get-DevRunCacheStats");
+                overview.AppendLine("- Background: Invoke-BackgroundProcess, Stop-BackgroundProcess, Get-BackgroundData");
+                overview.AppendLine();
+            }
 
-**SessionLog** (8 functions) - Session tracking with JSONL format (4 AM boundary)
-- Logging: Add-SessionLog, Add-Todo, Add-Note, Add-Bug
-- Reading: Read-SessionLog, Show-Session, Get-SessionDate
-- Updates: Update-TodoStatus
+            // AgentBricks module
+            if (installedModules.Contains("AgentBricks"))
+            {
+                overview.AppendLine("**AgentBricks** (5 functions) - Pattern learning and meta-discovery");
+                overview.AppendLine("- Patterns: Get-Patterns, Set-Pattern, Test-Pattern, Register-OutputPattern");
+                overview.AppendLine("- Discovery: Find-ProjectTools");
+                overview.AppendLine("- Pre-configured: 43 patterns for JavaScript, Python, .NET, Build tools");
+                overview.AppendLine();
+            }
 
-**TokenCounter** (1 function) - Accurate Claude token counting
-- Measure-Tokens (uses tiktoken with conda environment)
+            // LoraxMod module
+            if (installedModules.Contains("LoraxMod"))
+            {
+                overview.AppendLine("**LoraxMod** (7 functions) - Tree-sitter AST parsing for 12 languages");
+                overview.AppendLine("- Streaming: Start-LoraxStreamParser, Invoke-LoraxStreamQuery, Stop-LoraxStreamParser");
+                overview.AppendLine("- Analysis: Find-FunctionCalls, Get-IncludeDependencies");
+                overview.AppendLine("- Interactive: Start-TreeSitterSession");
+                overview.AppendLine();
+            }
 
-## Quick Navigation
+            // SessionLog module
+            if (installedModules.Contains("SessionLog"))
+            {
+                overview.AppendLine("**SessionLog** (8 functions) - Session tracking with JSONL format (4 AM boundary)");
+                overview.AppendLine("- Logging: Add-SessionLog, Add-Todo, Add-Note, Add-Bug");
+                overview.AppendLine("- Reading: Read-SessionLog, Show-Session, Get-SessionDate");
+                overview.AppendLine("- Updates: Update-TodoStatus");
+                overview.AppendLine();
+            }
 
-**Module Details:**
-- pwsh_mcp://base - Base module functions and examples
-- pwsh_mcp://agentbricks - AgentBricks patterns and discovery
-- pwsh_mcp://loraxmod - LoraxMod streaming parser protocol
-- pwsh_mcp://sessionlog - SessionLog workflow
-- pwsh_mcp://tokencounter - TokenCounter usage
+            // TokenCounter module
+            if (installedModules.Contains("TokenCounter"))
+            {
+                overview.AppendLine("**TokenCounter** (1 function) - Accurate Claude token counting");
+                overview.AppendLine("- Measure-Tokens (uses tiktoken with conda environment)");
+                overview.AppendLine();
+            }
 
-**Mode Callback Pattern:**
-- pwsh_mcp://mode-callback - Universal mode callback examples
+            if (installedModules.Count == 0)
+            {
+                overview.AppendLine("**No modules detected.** Modules may not be loaded yet. Try executing a pwsh command first.");
+                overview.AppendLine();
+            }
 
-**Workflows:**
-- pwsh_mcp://workflows - Common analysis workflows and pipelines
+            overview.AppendLine("## Quick Navigation");
+            overview.AppendLine();
+            overview.AppendLine("**Module Details:**");
+            overview.AppendLine("- pwsh_mcp://base - Base module functions and examples");
+            overview.AppendLine("- pwsh_mcp://agentbricks - AgentBricks patterns and discovery");
+            overview.AppendLine("- pwsh_mcp://loraxmod - LoraxMod streaming parser protocol");
+            overview.AppendLine("- pwsh_mcp://sessionlog - SessionLog workflow");
+            overview.AppendLine("- pwsh_mcp://tokencounter - TokenCounter usage");
+            overview.AppendLine();
+            overview.AppendLine("**Mode Callback Pattern:**");
+            overview.AppendLine("- pwsh_mcp://mode-callback - Universal mode callback examples");
+            overview.AppendLine();
+            overview.AppendLine("**Workflows:**");
+            overview.AppendLine("- pwsh_mcp://workflows - Common analysis workflows and pipelines");
 
-## Mode Callback Pattern (92% Token Reduction)
-
-Instead of 40+ separate MCP tools, use single pwsh tool with mode parameter:
-
-```python
-# Call Base module functions via mode
-mcp__pwsh-repl__pwsh(
-    mode='Invoke-DevRun',
-    script='dotnet build',
-    name='build',
-    kwargs={'Streams': ['Error', 'Warning']}
-)
-
-# Analyze cached results
-mcp__pwsh-repl__pwsh(
-    mode='Get-StreamData',
-    script='Group-BuildErrors | Format-Count',
-    kwargs={'Name': 'build', 'Stream': 'Error'}
-)
-```
-
-**Benefits:**
-- 550 tokens saved (92% reduction)
-- Cleaner API surface
-- All executions auto-cache in $global:DevRunCache
-- Session-persistent state
-";
+            return overview.ToString();
+        }
+        catch (Exception ex)
+        {
+            return $"Error retrieving overview: {ex.Message}";
+        }
     }
 
     // ========================================
@@ -116,7 +151,17 @@ mcp__pwsh-repl__pwsh(
         try
         {
             session.PowerShell.AddScript(@"
-$manifest = Import-PowerShellDataFile ""$PSScriptRoot/../Modules/Base/Base.psd1""
+$manifestPath = ""$PSScriptRoot/../Modules/Base/Base.psd1""
+if (-not (Test-Path $manifestPath)) {
+    Write-Output ""# Base Module (Not Installed)""
+    Write-Output """"
+    Write-Output ""**Module not found.** Base module is not installed or not in the expected location.""
+    Write-Output """"
+    Write-Output ""Expected path: $manifestPath""
+    return
+}
+
+$manifest = Import-PowerShellDataFile $manifestPath
 
 ""# Base Module v$($manifest.ModuleVersion)""
 """"
@@ -209,7 +254,26 @@ $manifest.PrivateData.PSData.ReleaseNotes
         try
         {
             session.PowerShell.AddScript(@"
-$manifest = Import-PowerShellDataFile ""$PSScriptRoot/../Modules/AgentBricks/AgentBricks.psd1""
+$manifestPath = ""$PSScriptRoot/../Modules/AgentBricks/AgentBricks.psd1""
+if (-not (Test-Path $manifestPath)) {
+    Write-Output ""# AgentBricks Module (Not Installed)""
+    Write-Output """"
+    Write-Output ""**Module not found.** AgentBricks module is not installed or not in the expected location.""
+    Write-Output """"
+    Write-Output ""Expected path: $manifestPath""
+    Write-Output """"
+    Write-Output ""## Installation""
+    Write-Output """"
+    Write-Output ""AgentBricks is included with the PowerShell MCP Server. If you see this message, the module may not have been copied during build.""
+    Write-Output """"
+    Write-Output ""To resolve:""
+    Write-Output ""1. Rebuild the project: dotnet build""
+    Write-Output ""2. Verify CopyAgentBricksModule target in .csproj""
+    Write-Output ""3. Check bin/Debug/net8.0-windows/win-x64/Modules/AgentBricks exists""
+    return
+}
+
+$manifest = Import-PowerShellDataFile $manifestPath
 
 ""# AgentBricks Module v$($manifest.ModuleVersion)""
 """"
@@ -278,7 +342,9 @@ $manifest.PrivateData.PSData.ReleaseNotes
     [Description("LoraxMod module: Streaming tree-sitter AST parsing for 12 languages with 40x speedup")]
     public string GetLoraxModModule()
     {
-        return @"# LoraxMod Module v0.3.0
+        return @"# LoraxMod Module
+
+**Note:** LoraxMod is an optional external module. Check if loaded with `Get-Module LoraxMod`.
 
 Tree-sitter AST parsing module with streaming session protocol for high-performance batch processing.
 
@@ -553,6 +619,8 @@ Optional filter for parse/query commands:
     {
         return @"# SessionLog Module
 
+**Note:** SessionLog is an optional external module. Check if loaded with `Get-Module SessionLog`.
+
 Session tracking with JSONL format and 4 AM session boundary rule.
 
 ## Functions (8)
@@ -632,6 +700,8 @@ mcp__pwsh-repl__pwsh(
     public string GetTokenCounterModule()
     {
         return @"# TokenCounter Module
+
+**Note:** TokenCounter is an optional external module. Check if loaded with `Get-Module TokenCounter`.
 
 Accurate Claude token counting using tiktoken library in conda environment.
 
