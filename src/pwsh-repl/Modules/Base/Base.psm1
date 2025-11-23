@@ -2,25 +2,40 @@
 
 <#
 .SYNOPSIS
-    Base - Hardcoded foundational functions for PowerShell MCP Server
+    Base - Foundational functions for PowerShell MCP Server
 
 .DESCRIPTION
-    Placeholder module for functions that must be hardcoded into the MCP server's module structure.
-    Currently empty - functions will be added as needs arise.
+    Core execution, transformation, and state management functions that form the foundation
+    for all PowerShell MCP Server operations. This module provides:
 
-    Use cases for Base module:
-    - Core utilities needed before any user modules load
-    - Functions that cannot depend on external modules
-    - Critical debugging/diagnostic tools
-    - Session management helpers
+    - Execution: dev_run workflow, output capture, timeout handling
+    - Transform: Format-Count, Group-By, similarity grouping, error analysis
+    - State: Cache management, script registry, environment export
+
+    All sessions cache executions by default in $global:DevRunCache (initialized by C#).
 
 .NOTES
     Author: pwsh-repl
-    Version: 0.1.0
+    Version: 0.2.0
     This module auto-loads with PowerShell MCP Server sessions.
+    Cache initialization handled by SessionManager.cs (ConcurrentDictionary).
 #>
 
-# Future: Add hardcoded functions here as needed
+# Dot-source all function files
+# Core execution functions
+Get-ChildItem -Path "$PSScriptRoot/Core/*.ps1" -ErrorAction SilentlyContinue | ForEach-Object {
+    . $_.FullName
+}
 
-# Export module members (currently none)
-Export-ModuleMember -Function @()
+# Transform functions (analysis, formatting, extraction)
+Get-ChildItem -Path "$PSScriptRoot/Transform/*.ps1" -ErrorAction SilentlyContinue | ForEach-Object {
+    . $_.FullName
+}
+
+# State management functions (cache, registry, export)
+Get-ChildItem -Path "$PSScriptRoot/State/*.ps1" -ErrorAction SilentlyContinue | ForEach-Object {
+    . $_.FullName
+}
+
+# Export controlled by manifest (.psd1 FunctionsToExport)
+# No Export-ModuleMember needed when using manifest

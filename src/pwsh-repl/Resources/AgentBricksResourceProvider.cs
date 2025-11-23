@@ -8,7 +8,7 @@ namespace PowerShellMcpServer.pwsh_repl.Resources;
 /// <summary>
 /// Provides MCP resources for PowerShell module documentation.
 /// Auto-generates from PWSH_MCP_MODULES environment variable.
-/// Resources are fetched on-demand, not included in tool descriptions.
+/// All content programmatically extracted from manifests and docstrings.
 /// </summary>
 [McpServerResourceType]
 public class PowerShellModuleResourceProvider
@@ -21,7 +21,7 @@ public class PowerShellModuleResourceProvider
     }
 
     [McpServerResource(UriTemplate = "pwsh_mcp_modules://modules")]
-    [Description("List of all loaded PowerShell modules from PWSH_MCP_MODULES")]
+    [Description("List of all loaded PowerShell modules with metadata from manifests")]
     public string GetModules()
     {
         var session = _sessionManager.GetOrCreateSession("resource_temp");
@@ -29,10 +29,41 @@ public class PowerShellModuleResourceProvider
         try
         {
             session.PowerShell.AddScript(@"
-Get-Module | Where-Object { $_.Path -like '*AgentBricks*' -or $_.Path -like '*Base*' -or $_.Name -match 'SessionLog|TokenCounter' } |
-    Select-Object Name, Description, @{N='Functions';E={($_.ExportedCommands.Values | Measure-Object).Count}} |
-    Format-Table -AutoSize |
-    Out-String -Width 120
+# Discover modules from PWSH_MCP_MODULES
+$modulePaths = $env:PWSH_MCP_MODULES -split ';' | Where-Object { $_ }
+$moduleManifests = $modulePaths | Where-Object { $_ -match '\.psd1$' }
+
+# Read manifest data programmatically
+foreach ($manifestPath in $moduleManifests) {
+    if (-not (Test-Path $manifestPath)) { continue }
+
+    # Import manifest as data
+    $manifest = Import-PowerShellDataFile $manifestPath
+    $moduleName = [System.IO.Path]::GetFileNameWithoutExtension($manifestPath)
+
+    ""=== $moduleName ===""
+    ""Version: $($manifest.ModuleVersion)""
+    ""Description: $($manifest.Description)""
+    """"
+    ""Functions ($($manifest.FunctionsToExport.Count)):""
+    $manifest.FunctionsToExport | ForEach-Object { ""  - $_"" }
+    """"
+
+    if ($manifest.PrivateData.PSData.Tags) {
+        ""Tags: $($manifest.PrivateData.PSData.Tags -join ', ')""
+        """"
+    }
+
+    if ($manifest.PrivateData.PSData.ReleaseNotes) {
+        ""Release Notes:""
+        $manifest.PrivateData.PSData.ReleaseNotes
+        """"
+    }
+}
+
+""---""
+""For detailed function help: Get-Help FunctionName -Detailed""
+""For examples: pwsh_mcp_modules://examples""
 ");
             var results = session.PowerShell.Invoke();
             session.PowerShell.Commands.Clear();
@@ -42,12 +73,10 @@ Get-Module | Where-Object { $_.Path -like '*AgentBricks*' -or $_.Path -like '*Ba
             output.AppendLine("Loaded PowerShell Modules");
             output.AppendLine("========================");
             output.AppendLine();
-            output.AppendLine("From PWSH_MCP_MODULES environment variable:");
-            output.AppendLine();
 
             foreach (var result in results)
             {
-                output.Append(result.ToString());
+                output.AppendLine(result.ToString());
             }
 
             return output.ToString();
@@ -59,7 +88,7 @@ Get-Module | Where-Object { $_.Path -like '*AgentBricks*' -or $_.Path -like '*Ba
     }
 
     [McpServerResource(UriTemplate = "pwsh_mcp_modules://functions")]
-    [Description("Complete list of functions from all loaded PowerShell modules")]
+    [Description("Complete list of functions with signatures from docstrings")]
     public string GetFunctions()
     {
         var session = _sessionManager.GetOrCreateSession("resource_temp");
@@ -67,16 +96,47 @@ Get-Module | Where-Object { $_.Path -like '*AgentBricks*' -or $_.Path -like '*Ba
         try
         {
             session.PowerShell.AddScript(@"
-$modules = Get-Module | Where-Object { $_.Path -like '*AgentBricks*' -or $_.Path -like '*Base*' -or $_.Name -match 'SessionLog|TokenCounter' }
+# Discover modules from PWSH_MCP_MODULES
+$modulePaths = $env:PWSH_MCP_MODULES -split ';' | Where-Object { $_ }
+$moduleNames = $modulePaths | ForEach-Object {
+    if ($_ -match '[\\/]([^\\/]+)\.psd1$') { $matches[1] }
+}
+
+$modules = Get-Module | Where-Object { $moduleNames -contains $_.Name }
 $modules | ForEach-Object {
     $moduleName = $_.Name
     ""=== $moduleName ===""
-    Get-Command -Module $moduleName | Sort-Object Name | ForEach-Object {
-        $help = Get-Help $_.Name -ErrorAction SilentlyContinue
-        ""  $($_.Name) - $($help.Synopsis)""
-    }
     """"
+
+    Get-Command -Module $moduleName | Sort-Object Name | ForEach-Object {
+        $cmdName = $_.Name
+        $help = Get-Help $cmdName -ErrorAction SilentlyContinue
+
+        # Extract signature
+        $synopsis = $help.Synopsis
+        $syntax = $help.Syntax.syntaxItem | Select-Object -First 1
+
+        ""  $cmdName""
+        ""    Synopsis: $synopsis""
+
+        if ($syntax) {
+            $params = $syntax.parameter | ForEach-Object {
+                $paramName = $_.name
+                $required = $_.required -eq 'true'
+                $type = $_.type.name
+                if ($required) { ""<$paramName>"" } else { ""[$paramName]"" }
+            }
+            if ($params) {
+                ""    Signature: $cmdName $($params -join ' ')""
+            }
+        }
+        """"
+    }
 }
+
+""---""
+""For detailed help: Get-Help <function> -Full""
+""For examples: pwsh_mcp_modules://examples""
 ");
             var results = session.PowerShell.Invoke();
             session.PowerShell.Commands.Clear();
@@ -100,39 +160,73 @@ $modules | ForEach-Object {
         }
     }
 
-    [McpServerResource(UriTemplate = "pwsh_mcp_modules://patterns")]
-    [Description("Pre-configured regex patterns from modules (AgentBricks, etc.)")]
-    public string GetPatterns()
+    [McpServerResource(UriTemplate = "pwsh_mcp_modules://examples")]
+    [Description("Code examples extracted from function docstrings")]
+    public string GetExamples()
     {
         var session = _sessionManager.GetOrCreateSession("resource_temp");
 
         try
         {
             session.PowerShell.AddScript(@"
-Get-Patterns |
-    Sort-Object Category, Name |
-    Format-Table -AutoSize Category, Name, Description |
-    Out-String -Width 120
+# Discover modules from PWSH_MCP_MODULES
+$modulePaths = $env:PWSH_MCP_MODULES -split ';' | Where-Object { $_ }
+$moduleNames = $modulePaths | ForEach-Object {
+    if ($_ -match '[\\/]([^\\/]+)\.psd1$') { $matches[1] }
+}
+
+$modules = Get-Module | Where-Object { $moduleNames -contains $_.Name }
+$modules | ForEach-Object {
+    $moduleName = $_.Name
+    ""=== $moduleName ===""
+    """"
+
+    $commands = Get-Command -Module $moduleName | Sort-Object Name
+    foreach ($cmd in $commands) {
+        $help = Get-Help $cmd.Name -Full -ErrorAction SilentlyContinue
+
+        if ($help.examples.example) {
+            ""## $($cmd.Name)""
+            """"
+
+            foreach ($example in $help.examples.example) {
+                $title = $example.title -replace '-+\s*', ''
+                ""### $title""
+                ""``````powershell""
+                $example.code
+                ""``````""
+
+                if ($example.remarks) {
+                    $example.remarks | ForEach-Object { $_.Text }
+                }
+                """"
+            }
+        }
+    }
+}
+
+""---""
+""Examples extracted from Get-Help -Full""
 ");
             var results = session.PowerShell.Invoke();
             session.PowerShell.Commands.Clear();
             session.PowerShell.Streams.ClearStreams();
 
             var output = new StringBuilder();
-            output.AppendLine("Pre-configured Patterns");
-            output.AppendLine("=======================");
+            output.AppendLine("PowerShell Module Examples");
+            output.AppendLine("==========================");
             output.AppendLine();
 
             foreach (var result in results)
             {
-                output.Append(result.ToString());
+                output.AppendLine(result.ToString());
             }
 
             return output.ToString();
         }
         catch (Exception ex)
         {
-            return $"Error retrieving patterns: {ex.Message}";
+            return $"Error retrieving examples: {ex.Message}";
         }
     }
 
@@ -176,8 +270,7 @@ Get-Content app.log | Select-RegexMatch -Pattern '(?<time>\d+:\d+) (?<level>\w+)
 
 - **List functions:** `Get-Command -Module AgentBricks`
 - **Get help:** `Get-Help <function> -Detailed`
-- **List patterns:** `Get-Patterns`
-- **Filter patterns:** `Get-Patterns | Where-Object { $_.Category -eq 'error' }`
+- **List patterns:** `Get-Patterns` (if AgentBricks loaded)
 - **Test pattern:** `Test-Pattern <pattern-name> <sample-text>`
 
 ## Key Functions
@@ -191,9 +284,288 @@ Get-Content app.log | Select-RegexMatch -Pattern '(?<time>\d+:\d+) (?<level>\w+)
 
 ## Discovery Resources
 
-- `pwsh_mcp_modules://modules` - List loaded modules
-- `pwsh_mcp_modules://functions` - All functions from all modules
-- `pwsh_mcp_modules://patterns` - Pattern catalog (AgentBricks)
+- `pwsh_mcp_modules://modules` - Module metadata from manifests
+- `pwsh_mcp_modules://functions` - Function signatures from docstrings
+- `pwsh_mcp_modules://examples` - Code examples from Get-Help
+- `pwsh_mcp_modules://streaming-parser` - Streaming parser protocol
+";
+    }
+
+    [McpServerResource(UriTemplate = "pwsh_mcp_modules://streaming-parser")]
+    [Description("LoraxMod streaming parser protocol documentation with command signatures")]
+    public string GetStreamingParserDocs()
+    {
+        return @"# LoraxMod Streaming Parser Protocol
+
+## Overview
+
+Long-running Node.js process for high-performance tree-sitter code parsing.
+Processes multiple files (100+) with 40x+ speedup vs per-file process spawning.
+
+## Architecture
+
+**Process:** Node.js streaming_query_parser.js
+**Protocol:** JSON command-response over stdin/stdout
+**Languages:** 12 (C, C++, C#, Python, JavaScript, Bash, PowerShell, R, Rust, CSS, HTML, Fortran)
+
+## Session Lifecycle
+
+```powershell
+# 1. Initialize session
+$sessionId = Start-LoraxStreamParser -SessionId 'batch1'
+
+# 2. Process files (reusable - one session, many files)
+Get-ChildItem *.c | Invoke-LoraxStreamQuery -SessionId $sessionId -Command parse
+
+# 3. Shutdown gracefully
+$stats = Stop-LoraxStreamParser -SessionId $sessionId
+```
+
+## Commands
+
+### PING - Health Check
+
+**Signature:** `ping()`
+
+Verify parser responsiveness and get current statistics.
+
+**PowerShell:**
+```powershell
+Invoke-LoraxStreamQuery -SessionId 'default' -Command ping
+```
+
+**JSON Protocol:**
+```json
+{ ""command"": ""ping"" }
+```
+
+**Response:**
+```json
+{
+  ""status"": ""pong"",
+  ""uptime"": 5234,
+  ""filesProcessed"": 42,
+  ""queries"": 128,
+  ""errors"": 0,
+  ""memoryUsage"": { ""rss"": 123456789 }
+}
+```
+
+### PARSE - Extract Code Segments
+
+**Signature:** `parse(file: string, context?: object)`
+
+Parse file and extract structural code segments (classes, functions, methods, etc.).
+
+**PowerShell:**
+```powershell
+# Single file
+Invoke-LoraxStreamQuery -SessionId 'batch1' -File 'app.c' -Command parse
+
+# Pipeline (batch)
+Get-ChildItem *.c -Recurse | Invoke-LoraxStreamQuery -SessionId 'batch1' -Command parse
+```
+
+**JSON Protocol:**
+```json
+{
+  ""command"": ""parse"",
+  ""file"": ""C:/project/app.c"",
+  ""context"": {
+    ""Elements"": [""function"", ""class""],
+    ""Exclusions"": [""constant""],
+    ""PreserveContext"": true,
+    ""Filters"": { ""ClassName"": ""MyClass"" }
+  }
+}
+```
+
+**Response (Success):**
+```json
+{
+  ""status"": ""ok"",
+  ""result"": {
+    ""file"": ""C:/project/app.c"",
+    ""language"": ""c"",
+    ""segments"": [
+      {
+        ""type"": ""function"",
+        ""name"": ""calculate"",
+        ""startLine"": 10,
+        ""endLine"": 20,
+        ""content"": ""int calculate(int x) { ... }"",
+        ""lineCount"": 11
+      }
+    ],
+    ""segmentCount"": 1
+  },
+  ""stats"": { ""filesProcessed"": 1, ""queries"": 0 }
+}
+```
+
+**Response (Error):**
+```json
+{
+  ""status"": ""error"",
+  ""error"": {
+    ""type"": ""ParseError"",
+    ""message"": ""File not found: invalid.c"",
+    ""file"": ""C:/project/invalid.c""
+  }
+}
+```
+
+### QUERY - Execute Tree-Sitter Pattern
+
+**Signature:** `query(file: string, query: string, context?: object)`
+
+Parse file and run tree-sitter S-expression query.
+
+**PowerShell:**
+```powershell
+$query = '(function_declaration declarator: (identifier) @func)'
+Invoke-LoraxStreamQuery -SessionId 'batch1' -File 'code.c' -Command query -Query $query
+```
+
+**JSON Protocol:**
+```json
+{
+  ""command"": ""query"",
+  ""file"": ""C:/project/code.c"",
+  ""query"": ""(function_declaration declarator: (identifier) @func)"",
+  ""context"": {}
+}
+```
+
+**Response (Success):**
+```json
+{
+  ""status"": ""ok"",
+  ""result"": {
+    ""file"": ""C:/project/code.c"",
+    ""language"": ""c"",
+    ""queryResults"": [
+      {
+        ""name"": ""func"",
+        ""text"": ""calculate"",
+        ""startPosition"": { ""row"": 9, ""column"": 14 },
+        ""endPosition"": { ""row"": 9, ""column"": 23 },
+        ""startIndex"": 145,
+        ""endIndex"": 154
+      }
+    ],
+    ""captureCount"": 1
+  },
+  ""stats"": { ""filesProcessed"": 1, ""queries"": 1 }
+}
+```
+
+### SHUTDOWN - Graceful Termination
+
+**Signature:** `shutdown()`
+
+Stop parser, retrieve final statistics, cleanup resources.
+
+**PowerShell:**
+```powershell
+$stats = Stop-LoraxStreamParser -SessionId 'batch1'
+Write-Host ""Processed $($stats.FilesProcessed) files""
+```
+
+**JSON Protocol:**
+```json
+{ ""command"": ""shutdown"" }
+```
+
+**Response:**
+```json
+{
+  ""status"": ""shutdown"",
+  ""finalStats"": {
+    ""filesProcessed"": 142,
+    ""queries"": 289,
+    ""errors"": 3,
+    ""duration"": 12534,
+    ""uptime"": 12534
+  }
+}
+```
+
+## Context Parameter (Extraction Filtering)
+
+Optional parameter for parse/query commands. Filters extracted segments.
+
+```json
+{
+  ""Elements"": [""function"", ""method""],          // Only extract these types
+  ""Exclusions"": [""constant"", ""variable""],     // Exclude these types
+  ""PreserveContext"": true,                       // Include parent class in names
+  ""ScopeFilter"": ""top-level"",                  // 'top-level' for module-level only
+  ""Filters"": {                                   // Name-based filters
+    ""ClassName"": ""MyClass"",
+    ""FunctionName"": ""calculate"",
+    ""Extends"": ""BaseClass""
+  }
+}
+```
+
+## Error Handling
+
+Parser catches all errors and returns JSON error response (no exceptions thrown).
+
+**Error Format:**
+```json
+{
+  ""status"": ""error"",
+  ""error"": {
+    ""type"": ""ParseError|FileNotFound|QueryError|ContextError"",
+    ""message"": ""Human-readable error message"",
+    ""file"": ""optional: source file if applicable""
+  }
+}
+```
+
+## Performance
+
+- **Single session:** 40x faster than per-file spawning
+- **Best for:** Batch processing 100+ files
+- **Memory:** ~50-100 MB per session (WASM parser + grammar)
+- **CPU:** Single-threaded (no concurrency benefits, but eliminates spawn overhead)
+
+**Benchmark (1000 files):**
+- Per-file spawning: ~45 seconds
+- Single session: ~1.2 seconds
+
+## Concurrent Sessions
+
+Multiple independent parser sessions for parallel processing:
+
+```powershell
+# Session 1: Process C files
+$s1 = Start-LoraxStreamParser -SessionId 'c_batch'
+
+# Session 2: Process Python files
+$s2 = Start-LoraxStreamParser -SessionId 'python_batch'
+
+# Process in parallel
+Get-ChildItem *.c | Invoke-LoraxStreamQuery -SessionId 'c_batch' -Command parse
+Get-ChildItem *.py | Invoke-LoraxStreamQuery -SessionId 'python_batch' -Command parse
+
+# Cleanup
+Stop-LoraxStreamParser -SessionId 'c_batch'
+Stop-LoraxStreamParser -SessionId 'python_batch'
+```
+
+## Supported Segment Types (parse command)
+
+By language. Common types:
+
+**C/C++:** function, class, namespace, variable, typedef, macro
+**Python:** function, class, method, variable, constant
+**JavaScript:** function, class, method, variable, constant, arrow_function
+**PowerShell:** function, cmdlet, param, variable, filter
+
+See loraxmod language documentation for complete segment type lists.
 ";
     }
 }

@@ -3,7 +3,7 @@
     RootModule = 'AgentBricks.psm1'
 
     # Version number of this module
-    ModuleVersion = '0.1.0'
+    ModuleVersion = '0.2.0'
 
     # Supported PSEditions
     CompatiblePSEditions = @('Core', 'Desktop')
@@ -21,62 +21,23 @@
     Copyright = '(c) 2024 pwsh-repl. All rights reserved.'
 
     # Description of the functionality provided by this module
-    Description = 'Self-teaching development toolkit for agent-driven PowerShell workflows. Provides composable functions for parsing build output, extracting errors, learning tool patterns, and analyzing development tool output. Designed for AI agents to discover and use via PowerShell help system.'
+    Description = 'Pattern learning and meta-discovery toolkit for agent-driven PowerShell workflows. Provides pre-configured patterns for 40+ development tools and meta-learning functions. Core functions migrated to Base module. Designed for AI agents to discover and use via PowerShell help system.'
 
     # Minimum version of the PowerShell engine required by this module
     PowerShellVersion = '7.0'
 
+    # Required modules (must be loaded before this module)
+    RequiredModules = @('Base')
+
     # Functions to export from this module
     FunctionsToExport = @(
-    # Transform
-        'Format-Count',
-        'Group-By',
-        'Measure-Frequency',
-        'Group-Similar',
-        'Group-BuildErrors',
-        # Extract
-        'Select-RegexMatch',
-        'Select-TextBetween',
-        'Select-Column',
-        # Analyze
-        'Find-Errors',
-        'Find-Warnings',
-        'Get-BuildError',
-        # Present
-        'Show',
-        'Export-ToFile',
-        'Get-StreamData',
-        'Show-StreamSummary',
         # Meta - Discovery
         'Find-ProjectTools',
         # Meta - Learning
         'Set-Pattern',
         'Get-Patterns',
         'Test-Pattern',
-        'Register-OutputPattern',
-        # State
-        'Save-Project',
-        'Import-Project',
-        'Get-BrickStore',
-        'Export-Environment',
-        'Clear-Stored',
-        'Set-EnvironmentTee',
-        'Invoke-CapturedProcess',
-        # DevRun Cache
-        'Initialize-DevRunCache',
-        'Get-CachedStreamData',
-        'Clear-DevRunCache',
-        'Get-DevRunCacheStats',
-        # DevRun Script Registry
-        'Add-DevScript',
-        'Get-DevScripts',
-        'Remove-DevScript',
-        'Update-DevScriptMetadata',
-        # DevRun Script Invocation
-        'Invoke-DevScript',
-        'Invoke-DevScriptChain',
-        # Utility
-        'Invoke-WithTimeout'
+        'Register-OutputPattern'
     )
 
     # Cmdlets to export from this module
@@ -102,20 +63,37 @@
 
             # ReleaseNotes of this module
             ReleaseNotes = @'
+0.2.0 - Base Module Migration (2025-11-23)
+BREAKING CHANGES:
+- Core functions (40 total) migrated to Base module
+- AgentBricks now focused on pattern learning and meta-discovery (5 functions)
+- RequiredModules: Base (auto-loads)
+
+Retained in AgentBricks:
+- Pattern learning: Get-Patterns, Set-Pattern, Test-Pattern, Register-OutputPattern
+- Meta-discovery: Find-ProjectTools
+- Pre-configured patterns: 43 patterns for JavaScript, Python, .NET, Build tools
+
+Migration Guide:
+- Old: Import-Module AgentBricks; Format-Count ...
+- New: Import-Module AgentBricks; Format-Count ...  # Same! (Base auto-loads)
+- Standalone Base: Import-Module Base; Format-Count ...
+
+Migrated to Base:
+- All Transform, Extract, Analyze, Present functions
+- All DevRun cache and script registry functions
+- All state management and background process functions
+- See Base module v0.2.0 for complete list
+
+0.1.1 - Background Process Management
+- Background process execution, monitoring
+- dev_run cache integration
+- PowerShell scripts and external executables
+
 0.1.0 - Initial POC Release
-- Core transformation functions (Format-Count, Group-By, Measure-Frequency, Group-Similar, Group-BuildErrors)
-- Fuzzy grouping with Jaro-Winkler distance for error clustering
-- Data extraction (Select-RegexMatch, Select-TextBetween, Select-Column)
-- Analysis functions (Find-Errors, Find-Warnings, Get-BuildError)
-- Presentation functions (Show, Export-ToFile, Get-StreamData, Show-StreamSummary)
-- dev_run stream integration (retrieve and format Error, Warning, Output, Verbose, Debug, Information)
-- Meta-learning (Register-OutputPattern, Test-Pattern, Set-Pattern, Get-Patterns)
-- Project discovery (Find-ProjectTools)
-- Pre-configured patterns for JS/TS, Python, .NET, and build tools (40+)
-- State management (Save-Project, Import-Project, Get-BrickStore, Export-Environment, Clear-Stored, Set-EnvironmentTee)
-- Process execution with I/O capture (Invoke-CapturedProcess)
-- Pipeline tee functionality for capture-and-pass-through workflows
-- Utility functions (Invoke-WithTimeout)
+- 40+ functions for build analysis, error parsing, pattern learning
+- Fuzzy grouping with Jaro-Winkler distance
+- Pre-configured patterns for JS/TS, Python, .NET, build tools
 '@
         }
     }

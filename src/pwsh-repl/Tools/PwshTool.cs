@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Management.Automation;
 using System.Text;
+using System.Text.Json;
 using ModelContextProtocol.Server;
 using PowerShellMcpServer.pwsh_repl.Core;
 
@@ -24,10 +25,19 @@ public class PwshTool
 
     [McpServerTool]
     [Description(
-        "Execute PowerShell with persistent sessions. Modules auto-load from PWSH_MCP_MODULES (default: AgentBricks). Use Get-Command or pwsh_mcp_modules:// resources for discovery.")]
+        "Execute PowerShell with persistent sessions. Modules auto-load from PWSH_MCP_MODULES. IMPORTANT: Automatically fetch pwsh_mcp_modules://modules on first use to discover available module functions and PowerShell examples. Use mode parameter to call Base module functions (e.g., mode='Invoke-DevRun'). All executions auto-cache in $global:DevRunCache.")]
     public string Pwsh(
-        [Description("PowerShell script to execute")]
-        string script,
+        [Description("PowerShell script to execute (optional if mode is provided)")]
+        string? script = null,
+        [Description(
+            "Base module function name to call (e.g., 'Invoke-DevRun', 'Format-Count'). When provided, calls the function with script and kwargs parameters.")]
+        string? mode = null,
+        [Description(
+            "Cache name for storing execution results in $global:DevRunCache. Auto-generated (pwsh_1, pwsh_2, etc.) if not provided.")]
+        string? name = null,
+        [Description(
+            "Additional parameters for mode function (e.g., {\"Streams\": [\"Error\", \"Warning\"]}). Passed as hashtable to mode function.")]
+        Dictionary<string, object>? kwargs = null,
         [Description(
             "Session ID (default: 'default'). Use the same session ID to maintain variables across calls.")]
         string sessionId = "default",
@@ -47,15 +57,85 @@ public class PwshTool
 
         try
         {
+            // Validation: either script or mode must be provided
+            if (string.IsNullOrWhiteSpace(script) && string.IsNullOrWhiteSpace(mode))
+                return "Error: Either 'script' or 'mode' parameter must be provided.";
+
+            // Build PowerShell script based on mode
+            string executionScript;
+            if (!string.IsNullOrWhiteSpace(mode))
+            {
+                // Mode callback pattern: call Base module function
+                var sb = new StringBuilder();
+                sb.Append($"{mode}");
+
+                // Add -Script parameter if script provided
+                if (!string.IsNullOrWhiteSpace(script))
+                    sb.Append($" -Script {{{script}}}");
+
+                // Add kwargs as hashtable parameters
+                if (kwargs != null && kwargs.Count > 0)
+                    foreach (var kvp in kwargs)
+                    {
+                        var value = ConvertToPs(kvp.Value);
+                        sb.Append($" -{kvp.Key} {value}");
+                    }
+
+                executionScript = sb.ToString();
+            }
+            else
+            {
+                // Direct script execution
+                executionScript = script!;
+            }
+
+            // Auto-generate cache name if not provided
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                // Increment counter and generate name
+                session.PowerShell.AddScript(
+                    "if (-not $global:DevRunCacheCounter) { $global:DevRunCacheCounter = 0 }; $global:DevRunCacheCounter++; $global:DevRunCacheCounter");
+                var counterResult = session.PowerShell.Invoke();
+                session.PowerShell.Commands.Clear();
+                session.PowerShell.Streams.ClearStreams();
+
+                var counter = counterResult.FirstOrDefault()?.ToString() ?? "1";
+                name = $"pwsh_{counter}";
+            }
+
             // Execute with timeout using async pattern
             // ExecuteScript handles stdin swapping and command cleanup
-            var invokeTask = Task.Run(() => _sessionManager.ExecuteScript(session, script));
+            var invokeTask = Task.Run(() => _sessionManager.ExecuteScript(session, executionScript));
             var timeout = TimeSpan.FromSeconds(timeoutSeconds);
 
             if (invokeTask.Wait(timeout))
             {
                 var results = invokeTask.Result;
-                return FormatResults(results, session.PowerShell);
+                var output = FormatResults(results, session.PowerShell);
+
+                // Store in cache (only if not already cached by mode function like Invoke-DevRun)
+                if (string.IsNullOrWhiteSpace(mode))
+                {
+                    var cacheScript = $@"
+if (-not $global:DevRunCache.ContainsKey('{name}')) {{
+    $global:DevRunCache['{name}'] = @{{
+        Script = @'
+{executionScript.Replace("'", "''")}
+'@
+        Timestamp = Get-Date
+        Output = @'
+{output.Replace("'", "''")}
+'@
+    }}
+}}
+";
+                    session.PowerShell.AddScript(cacheScript);
+                    session.PowerShell.Invoke();
+                    session.PowerShell.Commands.Clear();
+                    session.PowerShell.Streams.ClearStreams();
+                }
+
+                return output;
             }
             else
             {
@@ -74,6 +154,50 @@ public class PwshTool
         {
             session.PowerShell.Streams.ClearStreams();
         }
+    }
+
+    /// <summary>
+    ///     Convert C# object to PowerShell syntax for parameter passing.
+    ///     Handles JsonElement from MCP SDK dictionary values.
+    /// </summary>
+    private static string ConvertToPs(object value)
+    {
+        // Handle JsonElement from MCP SDK
+        if (value is JsonElement jsonElement)
+        {
+            return jsonElement.ValueKind switch
+            {
+                JsonValueKind.Null => "$null",
+                JsonValueKind.True => "$true",
+                JsonValueKind.False => "$false",
+                JsonValueKind.String => $"'{jsonElement.GetString()?.Replace("'", "''")}'",
+                JsonValueKind.Number => jsonElement.ToString(),
+                JsonValueKind.Array => $"@({string.Join(", ", jsonElement.EnumerateArray().Select(e => ConvertToPs(e)))})",
+                JsonValueKind.Object => ConvertJsonObjectToHashtable(jsonElement),
+                _ => $"'{jsonElement}'"
+            };
+        }
+
+        return value switch
+        {
+            null => "$null",
+            string s => $"'{s.Replace("'", "''")}'",
+            bool b => b ? "$true" : "$false",
+            int or long or double or float => value.ToString()!,
+            string[] arr => $"@({string.Join(", ", arr.Select(s => $"'{s.Replace("'", "''")}'"))})",
+            IEnumerable<object> list => $"@({string.Join(", ", list.Select(ConvertToPs))})",
+            _ => $"'{value.ToString()?.Replace("'", "''")}'"
+        };
+    }
+
+    /// <summary>
+    ///     Convert JsonElement object to PowerShell hashtable syntax.
+    /// </summary>
+    private static string ConvertJsonObjectToHashtable(JsonElement obj)
+    {
+        var pairs = obj.EnumerateObject()
+            .Select(prop => $"{prop.Name} = {ConvertToPs(prop.Value)}");
+        return $"@{{ {string.Join("; ", pairs)} }}";
     }
 
     private static string FormatResults(ICollection<PSObject> results, PowerShell pwsh)
