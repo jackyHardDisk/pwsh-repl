@@ -29,6 +29,15 @@
               SkipUnchangedFiles="true"/>
     </Target>
 
+    <Target Name="CopyBaseModule" AfterTargets="Build">
+        <ItemGroup>
+            <BaseFiles Include="src\pwsh-repl\Modules\Base\**\*.*"/>
+        </ItemGroup>
+        <Copy SourceFiles="@(BaseFiles)"
+              DestinationFolder="$(OutDir)Modules\Base\%(RecursiveDir)"
+              SkipUnchangedFiles="true"/>
+    </Target>
+
     <Target Name="CopyAgentBricksModule" AfterTargets="Build">
         <ItemGroup>
             <AgentBricksFiles Include="src\pwsh-repl\Modules\AgentBricks\**\*.*"/>
