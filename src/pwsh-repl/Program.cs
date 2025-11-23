@@ -1,3 +1,4 @@
+using System;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -28,6 +29,9 @@ await builder.Build().RunAsync();
 // Windows API imports - must be after top-level statements
 namespace PowerShellMcpServer.pwsh_repl
 {
+    using System;
+    using System.Runtime.InteropServices;
+
     internal static class NativeMethods
     {
         public const int STD_INPUT_HANDLE = -10;

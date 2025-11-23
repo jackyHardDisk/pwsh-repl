@@ -883,6 +883,132 @@ console.log('Initializing tree-sitter...');
     }
 }
 
+function Invoke-TreeSitterQuery {
+    <#
+    .SYNOPSIS
+    Run tree-sitter query pattern and return matches
+
+    .DESCRIPTION
+    Executes tree-sitter query pattern against code and returns JSON results.
+    Non-interactive - use for scripting and automation.
+
+    .PARAMETER Language
+    Programming language
+
+    .PARAMETER Code
+    Source code to query
+
+    .PARAMETER Pattern
+    Tree-sitter query pattern (e.g., "(call_expression function: (identifier) @func)")
+
+    .PARAMETER FilePath
+    Path to source file to query
+
+    .EXAMPLE
+    Invoke-TreeSitterQuery -Language c -Code 'int main() { printf("hi"); }' -Pattern '(call_expression function: (identifier) @func)'
+    Find all function calls in C code
+
+    .EXAMPLE
+    Invoke-TreeSitterQuery -Language python -FilePath script.py -Pattern '(function_definition name: (identifier) @name)'
+    Extract all function names from Python file
+
+    .NOTES
+    Returns JSON object with matches array containing captured nodes
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet('c', 'cpp', 'csharp', 'python', 'javascript', 'typescript', 'bash', 'powershell', 'r', 'rust', 'css', 'fortran')]
+        [string]$Language,
+
+        [Parameter(ParameterSetName='Code', Mandatory=$true)]
+        [string]$Code,
+
+        [Parameter(ParameterSetName='File', Mandatory=$true)]
+        [string]$FilePath,
+
+        [Parameter(Mandatory=$true)]
+        [string]$Pattern
+    )
+
+    # Get code from file if specified
+    if ($PSCmdlet.ParameterSetName -eq 'File') {
+        if (-not (Test-Path $FilePath)) {
+            Write-Error "File not found: $FilePath"
+            return
+        }
+        $Code = Get-Content $FilePath -Raw
+    }
+
+    # Escape for JSON
+    $escapedCode = $Code -replace '\\', '\\' -replace '"', '\"' -replace "`n", '\n' -replace "`r", '\r' -replace "`t", '\t'
+    $escapedPattern = $Pattern -replace '\\', '\\' -replace '"', '\"' -replace "`n", '\n'
+
+    # Get lorax path from module scope
+    $loraxPath = $script:LoraxPath
+
+    # Create query script
+    $queryScript = @"
+const lorax = require('$loraxPath');
+
+(async () => {
+    await lorax.initParser();
+    const parser = lorax.getParser();
+    const lang = await lorax.loadLanguage('$Language');
+
+    if (!lang) {
+        console.error(JSON.stringify({error: 'Failed to load language: $Language'}));
+        process.exit(1);
+    }
+
+    parser.setLanguage(lang);
+
+    const code = "$escapedCode";
+    const tree = parser.parse(code);
+    const query = lang.query("$escapedPattern");
+    const matches = query.matches(tree.rootNode);
+
+    const results = {
+        language: '$Language',
+        pattern: "$escapedPattern",
+        matches: matches.map(match => ({
+            pattern: match.pattern,
+            captures: match.captures.map(capture => ({
+                name: capture.name,
+                text: capture.node.text,
+                type: capture.node.type,
+                startLine: capture.node.startPosition.row + 1,
+                startColumn: capture.node.startPosition.column + 1,
+                endLine: capture.node.endPosition.row + 1,
+                endColumn: capture.node.endPosition.column + 1,
+                startIndex: capture.node.startIndex,
+                endIndex: capture.node.endIndex
+            }))
+        }))
+    };
+
+    console.log(JSON.stringify(results, null, 2));
+})();
+"@
+
+    # Write query script to temp file
+    $tempScript = Join-Path $env:TEMP "treesitter-query-$(Get-Random).js"
+    $queryScript | Out-File -FilePath $tempScript -Encoding utf8 -NoNewline
+
+    try {
+        # Execute and capture output
+        $output = & node $tempScript
+
+        # Parse JSON output
+        $output | ConvertFrom-Json
+    } finally {
+        # Cleanup
+        if (Test-Path $tempScript) {
+            Remove-Item $tempScript -Force
+        }
+    }
+}
+
 function Find-FunctionCalls {
     <#
     .SYNOPSIS
@@ -1145,6 +1271,485 @@ const lorax = require('$loraxPath');
 
     $tempScript = Join-Path $env:TEMP "includes-$(Get-Random).js"
     $includeScript | Out-File -FilePath $tempScript -Encoding utf8 -NoNewline
+
+    try {
+        $output = & node $tempScript
+        $output | ConvertFrom-Json
+    } finally {
+        if (Test-Path $tempScript) { Remove-Item $tempScript -Force }
+    }
+}
+
+function Get-ASTNode {
+    <#
+    .SYNOPSIS
+    Navigate to specific AST node by path
+
+    .DESCRIPTION
+    Traverses AST tree using node path (e.g., "0.1.2" means root.child(0).child(1).child(2)).
+    Returns node information including type, text, position, and available fields.
+
+    .PARAMETER Language
+    Programming language
+
+    .PARAMETER Code
+    Source code to parse
+
+    .PARAMETER FilePath
+    Path to source file
+
+    .PARAMETER NodePath
+    Dot-separated path to node (e.g., "0.1.2")
+
+    .EXAMPLE
+    Get-ASTNode -Language c -Code 'int main() {}' -NodePath "0"
+    Get first child of root
+
+    .EXAMPLE
+    Get-ASTNode -Language python -FilePath script.py -NodePath "0.1.2"
+    Navigate to specific node in Python file
+
+    .NOTES
+    Returns object with node details: type, text, position, fields, childCount
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet('c', 'cpp', 'csharp', 'python', 'javascript', 'typescript', 'bash', 'powershell', 'r', 'rust', 'css', 'fortran')]
+        [string]$Language,
+
+        [Parameter(ParameterSetName='Code')]
+        [string]$Code,
+
+        [Parameter(ParameterSetName='File')]
+        [string]$FilePath,
+
+        [Parameter(Mandatory=$true)]
+        [string]$NodePath
+    )
+
+    if ($PSCmdlet.ParameterSetName -eq 'File') {
+        if (-not (Test-Path $FilePath)) {
+            Write-Error "File not found: $FilePath"
+            return
+        }
+        $Code = Get-Content $FilePath -Raw
+    }
+
+    $escapedCode = $Code -replace '\\', '\\' -replace '"', '\"' -replace "`n", '\n' -replace "`r", '\r'
+
+    $navScript = @"
+const lorax = require('$loraxPath');
+
+(async () => {
+    await lorax.initParser();
+    const parser = lorax.getParser();
+    const lang = await lorax.loadLanguage('$Language');
+    parser.setLanguage(lang);
+
+    const code = "$escapedCode";
+    const tree = parser.parse(code);
+    const path = "$NodePath".split('.').filter(x => x);
+
+    let node = tree.rootNode;
+    for (const index of path) {
+        const i = parseInt(index);
+        if (isNaN(i) || i >= node.childCount) {
+            console.log(JSON.stringify({error: 'Invalid path: child index out of range'}));
+            process.exit(1);
+        }
+        node = node.child(i);
+    }
+
+    // Extract fields
+    const fields = {};
+    for (let i = 0; i < node.childCount; i++) {
+        const child = node.child(i);
+        if (child.fieldName) {
+            fields[child.fieldName] = { type: child.type, text: child.text.substring(0, 50) };
+        }
+    }
+
+    const result = {
+        type: node.type,
+        text: node.text.length > 200 ? node.text.substring(0, 197) + '...' : node.text,
+        startLine: node.startPosition.row + 1,
+        endLine: node.endPosition.row + 1,
+        childCount: node.childCount,
+        namedChildCount: node.namedChildCount,
+        fields: Object.keys(fields).length > 0 ? fields : undefined,
+        parent: node.parent ? { type: node.parent.type } : undefined
+    };
+
+    console.log(JSON.stringify(result, null, 2));
+})();
+"@
+
+    $tempScript = Join-Path $env:TEMP "get-node-$(Get-Random).js"
+    $navScript | Out-File -FilePath $tempScript -Encoding utf8 -NoNewline
+
+    try {
+        $output = & node $tempScript
+        $output | ConvertFrom-Json
+    } finally {
+        if (Test-Path $tempScript) { Remove-Item $tempScript -Force }
+    }
+}
+
+function Show-ASTTree {
+    <#
+    .SYNOPSIS
+    Display AST tree structure in readable format
+
+    .DESCRIPTION
+    Pretty-prints tree-sitter AST with indentation showing hierarchy.
+    Useful for understanding code structure and exploring available nodes.
+
+    .PARAMETER Language
+    Programming language
+
+    .PARAMETER Code
+    Source code to parse
+
+    .PARAMETER FilePath
+    Path to source file
+
+    .PARAMETER MaxDepth
+    Maximum tree depth to display (default: 3)
+
+    .PARAMETER ShowText
+    Include node text in output
+
+    .EXAMPLE
+    Show-ASTTree -Language c -Code 'int main() { return 0; }' -MaxDepth 4
+    Display C code structure
+
+    .EXAMPLE
+    Show-ASTTree -Language python -FilePath script.py -ShowText
+    Show Python file structure with text
+
+    .NOTES
+    Output format:
+    [type] text (line:col)
+      [child_type] child_text
+        [grandchild_type]
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet('c', 'cpp', 'csharp', 'python', 'javascript', 'typescript', 'bash', 'powershell', 'r', 'rust', 'css', 'fortran')]
+        [string]$Language,
+
+        [Parameter(ParameterSetName='Code')]
+        [string]$Code,
+
+        [Parameter(ParameterSetName='File')]
+        [string]$FilePath,
+
+        [Parameter()]
+        [int]$MaxDepth = 3,
+
+        [Parameter()]
+        [switch]$ShowText
+    )
+
+    if ($PSCmdlet.ParameterSetName -eq 'File') {
+        if (-not (Test-Path $FilePath)) {
+            Write-Error "File not found: $FilePath"
+            return
+        }
+        $Code = Get-Content $FilePath -Raw
+    }
+
+    $escapedCode = $Code -replace '\\', '\\' -replace '"', '\"' -replace "`n", '\n' -replace "`r", '\r'
+    $showTextFlag = if ($ShowText) { 'true' } else { 'false' }
+
+    $treeScript = @"
+const lorax = require('$loraxPath');
+
+(async () => {
+    await lorax.initParser();
+    const parser = lorax.getParser();
+    const lang = await lorax.loadLanguage('$Language');
+    parser.setLanguage(lang);
+
+    const code = "$escapedCode";
+    const tree = parser.parse(code);
+    const maxDepth = $MaxDepth;
+    const showText = $showTextFlag;
+
+    function display(node, depth = 0) {
+        if (depth > maxDepth) return;
+
+        const indent = '  '.repeat(depth);
+        const pos = node.startPosition.row + 1 + ':' + (node.startPosition.column + 1);
+        const text = showText && node.text.length < 40 ? ' ' + node.text.replace(/\n/g, '\\n') : '';
+
+        console.log(indent + '[' + node.type + ']' + text + ' (' + pos + ')');
+
+        for (let i = 0; i < node.childCount; i++) {
+            display(node.child(i), depth + 1);
+        }
+    }
+
+    display(tree.rootNode);
+})();
+"@
+
+    $tempScript = Join-Path $env:TEMP "show-tree-$(Get-Random).js"
+    $treeScript | Out-File -FilePath $tempScript -Encoding utf8 -NoNewline
+
+    try {
+        & node $tempScript
+    } finally {
+        if (Test-Path $tempScript) { Remove-Item $tempScript -Force }
+    }
+}
+
+function Export-ASTJson {
+    <#
+    .SYNOPSIS
+    Export complete AST to JSON file
+
+    .DESCRIPTION
+    Dumps full AST tree to JSON file for offline analysis, archival, or integration
+    with other tools. Includes node types, positions, text, and field information.
+
+    .PARAMETER Language
+    Programming language
+
+    .PARAMETER Code
+    Source code to parse
+
+    .PARAMETER FilePath
+    Path to source file to parse
+
+    .PARAMETER OutFile
+    Output JSON file path
+
+    .PARAMETER MaxDepth
+    Maximum tree depth to export (default: 10)
+
+    .PARAMETER IncludeFields
+    Include field information in output
+
+    .EXAMPLE
+    Export-ASTJson -Language c -FilePath main.c -OutFile main.ast.json
+    Export C file AST to JSON
+
+    .EXAMPLE
+    Export-ASTJson -Language python -FilePath script.py -OutFile ast.json -MaxDepth 5 -IncludeFields
+    Export Python AST with limited depth and fields
+
+    .NOTES
+    Output JSON contains nested node structure with type, position, text, children
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet('c', 'cpp', 'csharp', 'python', 'javascript', 'typescript', 'bash', 'powershell', 'r', 'rust', 'css', 'fortran')]
+        [string]$Language,
+
+        [Parameter(ParameterSetName='Code')]
+        [string]$Code,
+
+        [Parameter(ParameterSetName='File')]
+        [string]$FilePath,
+
+        [Parameter(Mandatory=$true)]
+        [string]$OutFile,
+
+        [Parameter()]
+        [int]$MaxDepth = 10,
+
+        [Parameter()]
+        [switch]$IncludeFields
+    )
+
+    if ($PSCmdlet.ParameterSetName -eq 'File') {
+        if (-not (Test-Path $FilePath)) {
+            Write-Error "File not found: $FilePath"
+            return
+        }
+        $Code = Get-Content $FilePath -Raw
+    }
+
+    $escapedCode = $Code -replace '\\', '\\' -replace '"', '\"' -replace "`n", '\n' -replace "`r", '\r'
+    $includeFieldsFlag = if ($IncludeFields) { 'true' } else { 'false' }
+
+    $exportScript = @"
+const lorax = require('$loraxPath');
+const fs = require('fs');
+
+(async () => {
+    await lorax.initParser();
+    const parser = lorax.getParser();
+    const lang = await lorax.loadLanguage('$Language');
+    parser.setLanguage(lang);
+
+    const code = "$escapedCode";
+    const tree = parser.parse(code);
+    const maxDepth = $MaxDepth;
+    const includeFields = $includeFieldsFlag;
+
+    function toJson(node, depth = 0) {
+        if (depth > maxDepth) {
+            return { type: node.type, truncated: true };
+        }
+
+        const result = {
+            type: node.type,
+            startLine: node.startPosition.row + 1,
+            startColumn: node.startPosition.column + 1,
+            endLine: node.endPosition.row + 1,
+            endColumn: node.endPosition.column + 1,
+            startIndex: node.startIndex,
+            endIndex: node.endIndex,
+            text: node.text.length > 100 ? node.text.substring(0, 97) + '...' : node.text
+        };
+
+        if (includeFields && node.childCount > 0) {
+            const fields = {};
+            for (let i = 0; i < node.childCount; i++) {
+                const child = node.child(i);
+                if (child.fieldName) {
+                    fields[child.fieldName] = { type: child.type, text: child.text.substring(0, 50) };
+                }
+            }
+            if (Object.keys(fields).length > 0) {
+                result.fields = fields;
+            }
+        }
+
+        if (node.childCount > 0) {
+            result.children = [];
+            for (let i = 0; i < node.childCount; i++) {
+                result.children.push(toJson(node.child(i), depth + 1));
+            }
+        }
+
+        return result;
+    }
+
+    const ast = {
+        language: '$Language',
+        rootNode: toJson(tree.rootNode)
+    };
+
+    fs.writeFileSync('$($OutFile -replace '\\', '\\')', JSON.stringify(ast, null, 2));
+    console.log('AST exported to: $OutFile');
+})();
+"@
+
+    $tempScript = Join-Path $env:TEMP "export-ast-$(Get-Random).js"
+    $exportScript | Out-File -FilePath $tempScript -Encoding utf8 -NoNewline
+
+    try {
+        & node $tempScript
+    } finally {
+        if (Test-Path $tempScript) { Remove-Item $tempScript -Force }
+    }
+}
+
+function Get-NodesByType {
+    <#
+    .SYNOPSIS
+    Find all AST nodes of specific type
+
+    .DESCRIPTION
+    Searches AST tree for all nodes matching specified type(s).
+    Quick filter without writing tree-sitter query patterns.
+
+    .PARAMETER Language
+    Programming language
+
+    .PARAMETER Code
+    Source code to parse
+
+    .PARAMETER FilePath
+    Path to source file
+
+    .PARAMETER NodeType
+    Node type(s) to find (e.g., 'function_definition', 'call_expression')
+
+    .EXAMPLE
+    Get-NodesByType -Language c -FilePath main.c -NodeType 'function_definition'
+    Find all function definitions
+
+    .EXAMPLE
+    Get-NodesByType -Language python -Code $script -NodeType 'call', 'import_statement'
+    Find calls and imports
+
+    .NOTES
+    Returns array of nodes with type, text, line, and parent information
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet('c', 'cpp', 'csharp', 'python', 'javascript', 'typescript', 'bash', 'powershell', 'r', 'rust', 'css', 'fortran')]
+        [string]$Language,
+
+        [Parameter(ParameterSetName='Code')]
+        [string]$Code,
+
+        [Parameter(ParameterSetName='File')]
+        [string]$FilePath,
+
+        [Parameter(Mandatory=$true)]
+        [string[]]$NodeType
+    )
+
+    if ($PSCmdlet.ParameterSetName -eq 'File') {
+        if (-not (Test-Path $FilePath)) {
+            Write-Error "File not found: $FilePath"
+            return
+        }
+        $Code = Get-Content $FilePath -Raw
+    }
+
+    $escapedCode = $Code -replace '\\', '\\' -replace '"', '\"' -replace "`n", '\n' -replace "`r", '\r'
+    $typesJson = ConvertTo-Json $NodeType -Compress
+
+    $filterScript = @"
+const lorax = require('$loraxPath');
+
+(async () => {
+    await lorax.initParser();
+    const parser = lorax.getParser();
+    const lang = await lorax.loadLanguage('$Language');
+    parser.setLanguage(lang);
+
+    const code = "$escapedCode";
+    const tree = parser.parse(code);
+    const targetTypes = $typesJson;
+
+    const results = [];
+
+    function traverse(node) {
+        if (targetTypes.includes(node.type)) {
+            results.push({
+                type: node.type,
+                text: node.text.length > 100 ? node.text.substring(0, 97) + '...' : node.text,
+                startLine: node.startPosition.row + 1,
+                endLine: node.endPosition.row + 1,
+                startIndex: node.startIndex,
+                endIndex: node.endIndex,
+                parent: node.parent ? { type: node.parent.type } : undefined
+            });
+        }
+
+        for (let i = 0; i < node.childCount; i++) {
+            traverse(node.child(i));
+        }
+    }
+
+    traverse(tree.rootNode);
+    console.log(JSON.stringify(results, null, 2));
+})();
+"@
+
+    $tempScript = Join-Path $env:TEMP "filter-nodes-$(Get-Random).js"
+    $filterScript | Out-File -FilePath $tempScript -Encoding utf8 -NoNewline
 
     try {
         $output = & node $tempScript

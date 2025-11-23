@@ -9,21 +9,12 @@ $global:BrickStore = @{
 }
 
 # Dot-source all function files
-# Core functions
-. $PSScriptRoot/Core/Transform.ps1
-. $PSScriptRoot/Core/Extract.ps1
-. $PSScriptRoot/Core/Analyze.ps1
-. $PSScriptRoot/Core/Present.ps1
-. $PSScriptRoot/Core/Timeout.ps1
-. $PSScriptRoot/Core/Python.ps1
+# NOTE: Core functions (Transform, Extract, Analyze, Present, Timeout) migrated to Base module
+# AgentBricks now focuses on meta-learning and pattern management
 
-# Meta-tools
+# Meta-tools (AgentBricks specialty)
 . $PSScriptRoot/Meta/Discovery.ps1
 . $PSScriptRoot/Meta/Learning.ps1
-
-# State management
-. $PSScriptRoot/State/Management.ps1
-. $PSScriptRoot/State/DevRunCache.ps1
 
 # Pre-configured patterns (automatically register on import)
 . $PSScriptRoot/Patterns/JavaScript.ps1

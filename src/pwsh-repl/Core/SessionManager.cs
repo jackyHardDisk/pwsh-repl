@@ -103,12 +103,28 @@ public class SessionManager : IDisposable
         // Activate environment if specified (BEFORE modules)
         if (!string.IsNullOrEmpty(environment)) ActivateEnvironment(pwsh, environment);
 
-        // Pre-load AgentBricks module
+        // Pre-load Base module (foundation for all core functions)
+        LoadModule(pwsh, "Base",
+            Path.Combine(AppContext.BaseDirectory, "Modules", "Base"));
+
+        // Pre-load AgentBricks module (depends on Base)
         LoadModule(pwsh, "AgentBricks",
             Path.Combine(AppContext.BaseDirectory, "Modules", "AgentBricks"), true);
 
         // Load additional modules from config
         LoadAdditionalModules(pwsh);
+
+        // Initialize ConcurrentDictionary for DevRun cache (in C# for thread-safety)
+        pwsh.AddScript(@"
+if (-not $global:DevRunCache) {
+    $global:DevRunCache = [System.Collections.Concurrent.ConcurrentDictionary[string, object]]::new()
+}
+if (-not $global:DevRunCacheCounter) {
+    $global:DevRunCacheCounter = 0
+}
+").Invoke();
+        pwsh.Commands.Clear();
+        pwsh.Streams.ClearStreams();
 
         return new PowerShellSession(pwsh, runspace);
     }
@@ -259,17 +275,90 @@ public class SessionManager : IDisposable
 
     private string[] GetAdditionalModulesFromConfig()
     {
-        // Read from PWSH_MCP_MODULES environment variable
+        var modulePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // 1. Auto-discover modules from default Modules folder
+        var defaultModulesPath = Path.Combine(AppContext.BaseDirectory, "Modules");
+        if (Directory.Exists(defaultModulesPath))
+        {
+            Console.Error.WriteLine($"SessionManager: Auto-discovering modules from '{defaultModulesPath}'");
+            AddModulesFromFolder(defaultModulesPath, modulePaths);
+        }
+
+        // 2. Process PWSH_MCP_MODULES environment variable (supports .psd1 files and folders)
         var modulesEnv = Environment.GetEnvironmentVariable("PWSH_MCP_MODULES");
+        if (!string.IsNullOrEmpty(modulesEnv))
+        {
+            var entries = modulesEnv.Split(';', StringSplitOptions.RemoveEmptyEntries);
+            Console.Error.WriteLine($"SessionManager: Processing {entries.Length} PWSH_MCP_MODULES entries");
 
-        if (string.IsNullOrEmpty(modulesEnv))
-            return Array.Empty<string>();
+            foreach (var entry in entries)
+            {
+                var trimmed = entry.Trim();
 
-        return modulesEnv
-            .Split(';', StringSplitOptions.RemoveEmptyEntries)
-            .Select(m => m.Trim())
-            .Where(m => File.Exists(m) || Directory.Exists(m))
-            .ToArray();
+                if (File.Exists(trimmed) && trimmed.EndsWith(".psd1", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Direct .psd1 file
+                    var fullPath = Path.GetFullPath(trimmed);
+                    modulePaths.Add(fullPath);
+                    Console.Error.WriteLine($"SessionManager:   Added module file: {fullPath}");
+                }
+                else if (Directory.Exists(trimmed))
+                {
+                    // Folder - scan for .psd1 files
+                    Console.Error.WriteLine($"SessionManager:   Scanning folder: {trimmed}");
+                    AddModulesFromFolder(trimmed, modulePaths);
+                }
+                else
+                {
+                    Console.Error.WriteLine($"SessionManager:   Skipping invalid entry: {trimmed}");
+                }
+            }
+        }
+
+        // 3. Filter out AgentBricks (loaded separately with validation)
+        var agentBricksPath = Path.GetFullPath(
+            Path.Combine(AppContext.BaseDirectory, "Modules", "AgentBricks", "AgentBricks.psd1"));
+        if (modulePaths.Remove(agentBricksPath))
+        {
+            Console.Error.WriteLine($"SessionManager: Removed AgentBricks from additional modules (loaded separately)");
+        }
+
+        var result = modulePaths.ToArray();
+        Console.Error.WriteLine($"SessionManager: Discovered {result.Length} additional modules after deduplication");
+        return result;
+    }
+
+    private void AddModulesFromFolder(string folderPath, HashSet<string> modulePaths)
+    {
+        try
+        {
+            // Scan for module subdirectories (pattern: Modules/ModuleName/ModuleName.psd1)
+            var subdirs = Directory.GetDirectories(folderPath);
+            foreach (var subdir in subdirs)
+            {
+                var moduleName = Path.GetFileName(subdir);
+                var manifestPath = Path.Combine(subdir, $"{moduleName}.psd1");
+
+                if (File.Exists(manifestPath))
+                {
+                    var fullPath = Path.GetFullPath(manifestPath);
+                    var isNew = modulePaths.Add(fullPath);
+                    if (isNew)
+                    {
+                        Console.Error.WriteLine($"SessionManager:     Found module: {moduleName} ({fullPath})");
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine($"SessionManager:     Skipped duplicate: {moduleName}");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"SessionManager: Failed to scan folder '{folderPath}': {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -444,5 +533,13 @@ public class SessionManager : IDisposable
     {
         // Legacy method - closes default session stdin for backwards compatibility
         CloseSessionStdin("default");
+    }
+
+    /// <summary>
+    ///     Get list of active session IDs.
+    /// </summary>
+    public IEnumerable<string> GetSessionIds()
+    {
+        return _sessions.Keys.OrderBy(k => k);
     }
 }
