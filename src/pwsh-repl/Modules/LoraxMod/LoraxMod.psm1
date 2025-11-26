@@ -11,7 +11,7 @@ Requires Node.js (optional peer dependency)
 loraxmod bundled in module directory
 #>
 
-# Store module root at load time (works in background sessions)
+# Store module root at load time (non-blocking MCP tool for claude that works in background sessions)
 $script:ModuleRoot = $PSScriptRoot
 $script:LoraxPath = "$script:ModuleRoot/loraxmod/lib/index.js" -replace '\\', '/'
 function Invoke-StreamingParser {
@@ -748,6 +748,10 @@ function Start-TreeSitterSession {
     Initializes Node.js REPL session with loraxmod pre-loaded and parser initialized.
     Sets up global variables: parser, tree, root for immediate navigation.
 
+    Two modes:
+    - Terminal mode (default): Blocking interactive REPL for human use
+    - Process mode (-AsProcess): Returns Process object for programmatic control via stdin
+
     .PARAMETER Language
     Programming language to parse (c, python, javascript, etc.)
 
@@ -757,16 +761,31 @@ function Start-TreeSitterSession {
     .PARAMETER FilePath
     Path to source file to parse
 
+    .PARAMETER AsProcess
+    Return Process object with stdin/stdout access for programmatic control.
+    Process must be manually stopped and disposed.
+
+    .PARAMETER SessionId
+    Session identifier for tracking (used with -AsProcess). Default: 'default'
+
     .EXAMPLE
     Start-TreeSitterSession -Language c -Code 'int main() { printf("hi"); }'
-    Starts REPL with C code parsed, ready to explore
+    Starts blocking REPL in terminal
 
     .EXAMPLE
-    Start-TreeSitterSession -Language python -FilePath script.py
-    Parse Python file and start interactive session
+    $repl = Start-TreeSitterSession -Language fortran -FilePath code.f90 -AsProcess
+    $repl.Process.StandardInput.WriteLine('root.childCount')
+    $output = $repl.Process.StandardOutput.ReadLine()
+    $repl.Process.Kill()
+    $repl.Process.Dispose()
+
+    .EXAMPLE
+    $repl = Start-TreeSitterSession -Language c -AsProcess -SessionId 'analysis1'
+    Send-REPLCommand -SessionId 'analysis1' -Command 'root.type'
+    Stop-TreeSitterSession -SessionId 'analysis1'
 
     .NOTES
-    In the REPL you can:
+    Terminal mode - type commands interactively:
     - root.type - Get node type
     - root.childCount - Count children
     - root.child(0) - Get first child
@@ -774,6 +793,8 @@ function Start-TreeSitterSession {
     - root.parent - Get parent node
     - root.startPosition - Get position {row, column}
     - root.text - Get source text
+
+    Process mode - use Process.StandardInput/StandardOutput for automation
     #>
     [CmdletBinding()]
     param(
@@ -785,8 +806,23 @@ function Start-TreeSitterSession {
         [string]$Code,
 
         [Parameter(ParameterSetName='File')]
-        [string]$FilePath
+        [string]$FilePath,
+
+        [switch]$AsProcess,
+
+        [string]$SessionId = 'default'
     )
+
+    # Initialize module-level session tracker if needed
+    if (-not $script:REPLSessions) {
+        $script:REPLSessions = @{}
+    }
+
+    # Check if session already exists (when using -AsProcess)
+    if ($AsProcess -and $script:REPLSessions.ContainsKey($SessionId)) {
+        Write-Warning "REPL session '$SessionId' already exists. Use Stop-TreeSitterSession first or choose different SessionId."
+        return $script:REPLSessions[$SessionId]
+    }
 
     # Get code from file if specified
     if ($PSCmdlet.ParameterSetName -eq 'File') {
@@ -872,13 +908,63 @@ console.log('Initializing tree-sitter...');
     $tempScript = Join-Path $env:TEMP "treesitter-init-$(Get-Random).js"
     $initScript | Out-File -FilePath $tempScript -Encoding utf8 -NoNewline
 
-    try {
-        # Start Node.js with init script
-        & node $tempScript
-    } finally {
-        # Cleanup
-        if (Test-Path $tempScript) {
-            Remove-Item $tempScript -Force
+    if ($AsProcess) {
+        # Process mode - return Process object with stdin/stdout access
+        try {
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = "node"
+            $psi.Arguments = $tempScript
+            $psi.UseShellExecute = $false
+            $psi.RedirectStandardInput = $true
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError = $true
+            $psi.CreateNoWindow = $true
+
+            $process = [System.Diagnostics.Process]::Start($psi)
+
+            if (-not $process) {
+                throw "Failed to start Node.js process"
+            }
+
+            # Give REPL time to initialize
+            Start-Sleep -Milliseconds 1500
+
+            # Store session info
+            $sessionInfo = @{
+                Process = $process
+                Language = $Language
+                InitScript = $tempScript
+                StartTime = Get-Date
+            }
+
+            $script:REPLSessions[$SessionId] = $sessionInfo
+
+            # Return session object
+            [PSCustomObject]@{
+                SessionId = $SessionId
+                Process = $process
+                Language = $Language
+                StartTime = $sessionInfo.StartTime
+            }
+        }
+        catch {
+            # Cleanup temp file on error
+            if (Test-Path $tempScript) {
+                Remove-Item $tempScript -Force -ErrorAction SilentlyContinue
+            }
+            throw
+        }
+    }
+    else {
+        # Terminal mode - blocking interactive REPL
+        try {
+            & node $tempScript
+        }
+        finally {
+            # Cleanup temp file
+            if (Test-Path $tempScript) {
+                Remove-Item $tempScript -Force
+            }
         }
     }
 }
@@ -1151,6 +1237,160 @@ const lorax = require('$loraxPath');
         $output | ConvertFrom-Json
     } finally {
         if (Test-Path $tempScript) { Remove-Item $tempScript -Force }
+    }
+}
+
+function Send-REPLCommand {
+    <#
+    .SYNOPSIS
+    Send command to interactive REPL session and read response
+
+    .DESCRIPTION
+    Sends JavaScript command to REPL session started with Start-TreeSitterSession -AsProcess.
+    Reads output from REPL stdout.
+
+    .PARAMETER SessionId
+    Session identifier from Start-TreeSitterSession. Default: 'default'
+
+    .PARAMETER Command
+    JavaScript command to execute in REPL context
+
+    .PARAMETER TimeoutSeconds
+    Seconds to wait for response. Default: 5
+
+    .EXAMPLE
+    $repl = Start-TreeSitterSession -Language c -AsProcess
+    Send-REPLCommand -Command 'root.childCount'
+    # Returns: 3
+
+    .EXAMPLE
+    Send-REPLCommand -SessionId 'analysis1' -Command 'root.type'
+    #Returns node type
+
+    .NOTES
+    REPL must be started with -AsProcess switch.
+    Commands execute in async context with lorax, parser, tree, root globals available.
+    #>
+    [CmdletBinding()]
+    param(
+        [string]$SessionId = 'default',
+
+        [Parameter(Mandatory=$true)]
+        [string]$Command,
+
+        [int]$TimeoutSeconds = 5
+    )
+
+    if (-not $script:REPLSessions) {
+        throw "No REPL sessions found. Start session with Start-TreeSitterSession -AsProcess first."
+    }
+
+    if (-not $script:REPLSessions.ContainsKey($SessionId)) {
+        throw "REPL session '$SessionId' not found. Available sessions: $($script:REPLSessions.Keys -join ', ')"
+    }
+
+    $session = $script:REPLSessions[$SessionId]
+    $process = $session.Process
+
+    if ($process.HasExited) {
+        throw "REPL session '$SessionId' has exited (exit code: $($process.ExitCode))"
+    }
+
+    try {
+        # Send command
+        $process.StandardInput.WriteLine($Command)
+
+        # Read response with timeout
+        $responseTask = $process.StandardOutput.ReadLineAsync()
+        $timeout = New-TimeSpan -Seconds $TimeoutSeconds
+
+        if ($responseTask.Wait($timeout)) {
+            $responseTask.Result
+        }
+        else {
+            Write-Warning "REPL command timed out after $TimeoutSeconds seconds"
+            $null
+        }
+    }
+    catch {
+        Write-Error "Failed to send command to REPL session '$SessionId': $_"
+    }
+}
+
+function Stop-TreeSitterSession {
+    <#
+    .SYNOPSIS
+    Stop REPL session and cleanup resources
+
+    .DESCRIPTION
+    Stops REPL process started with Start-TreeSitterSession -AsProcess.
+    Kills process, disposes resources, and removes session from tracker.
+
+    .PARAMETER SessionId
+    Session identifier to stop. Default: 'default'
+
+    .EXAMPLE
+    Stop-TreeSitterSession
+    # Stops default session
+
+    .EXAMPLE
+    Stop-TreeSitterSession -SessionId 'analysis1'
+    # Stops named session
+
+    .NOTES
+    Always stop sessions when done to free resources and cleanup temp files.
+    #>
+    [CmdletBinding()]
+    param(
+        [string]$SessionId = 'default'
+    )
+
+    if (-not $script:REPLSessions) {
+        Write-Warning "No REPL sessions found"
+        return
+    }
+
+    if (-not $script:REPLSessions.ContainsKey($SessionId)) {
+        Write-Warning "REPL session '$SessionId' not found. Available sessions: $($script:REPLSessions.Keys -join ', ')"
+        return
+    }
+
+    $session = $script:REPLSessions[$SessionId]
+    $process = $session.Process
+
+    try {
+        if (-not $process.HasExited) {
+            # Try graceful exit first
+            try {
+                $process.StandardInput.WriteLine('.exit')
+                $process.WaitForExit(2000)  # Wait 2 seconds
+            }
+            catch {
+                # Ignore errors from graceful exit attempt
+            }
+
+            # Force kill if still running
+            if (-not $process.HasExited) {
+                $process.Kill()
+                $process.WaitForExit(1000)
+            }
+        }
+
+        # Cleanup temp script
+        if ($session.InitScript -and (Test-Path $session.InitScript)) {
+            Remove-Item $session.InitScript -Force -ErrorAction SilentlyContinue
+        }
+
+        # Dispose process
+        $process.Dispose()
+
+        # Remove from tracker
+        $script:REPLSessions.Remove($SessionId)
+
+        Write-Verbose "REPL session '$SessionId' stopped"
+    }
+    catch {
+        Write-Error "Failed to stop REPL session '$SessionId': $_"
     }
 }
 

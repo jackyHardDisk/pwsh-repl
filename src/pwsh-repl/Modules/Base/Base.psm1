@@ -8,7 +8,7 @@
     Core execution, transformation, and state management functions that form the foundation
     for all PowerShell MCP Server operations. This module provides:
 
-    - Execution: dev_run workflow, output capture, timeout handling
+    - Execution: Invoke-DevRun workflow (mode callback pattern), output capture, timeout handling
     - Transform: Format-Count, Group-By, similarity grouping, error analysis
     - State: Cache management, script registry, environment export
 

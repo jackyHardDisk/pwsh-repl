@@ -9,14 +9,20 @@ Sophisticated workflows showing non-intuitive features and tool combinations.
 **Solution:** Use `Group-Similar` with Jaro-Winkler distance to cluster related errors.
 
 ```powershell
-# Run build and capture output
-dev_run 'npm run build' 'build'
+# Run build and capture output with Invoke-DevRun
+mcp__pwsh-repl__pwsh(
+    mode='Invoke-DevRun',
+    script='npm run build',
+    name='build'
+)
 
 # Group similar errors and count occurrences
-Get-StreamData 'build' stderr |
+mcp__pwsh-repl__pwsh(script='''
+Get-StreamData build Error |
     Find-Errors |
     Group-Similar -Threshold 0.85 |
     Format-Count
+''')
 
 # Output: Top 5 error patterns with counts
 # 15x: Cannot find module '@types/...'
@@ -26,8 +32,8 @@ Get-StreamData 'build' stderr |
 
 **Why this works:**
 
-- `dev_run` stores all 6 PowerShell streams in JSON ($env:build_streams)
-- `Get-StreamData` retrieves specific stream (stderr) from cache
+- `Invoke-DevRun` stores all 6 PowerShell streams in JSON ($global:DevRunCache)
+- `Get-StreamData` retrieves specific stream (Error) from cache
 - `Group-Similar` uses fuzzy matching to cluster "Cannot find module '@types/react'"
   and "Cannot find module '@types/node'"
 - `Format-Count` aggregates and sorts by frequency
@@ -37,31 +43,49 @@ Get-StreamData 'build' stderr |
 **Problem:** Multi-stage build (lint → compile → test) across different tools, want
 single analysis.
 
-**Solution:** Chain `dev_run` calls in named sessions with environment isolation.
+**Solution:** Chain `Invoke-DevRun` calls in named sessions with environment isolation.
 
 ```powershell
 # Stage 1: Lint with Ruff (Python venv)
-dev_run 'ruff check .' 'lint' -sessionId 'myproject' -environment 'C:\projects\myapp\venv'
+mcp__pwsh-repl__pwsh(
+    mode='Invoke-DevRun',
+    script='ruff check .',
+    name='lint',
+    sessionId='myproject',
+    environment='C:\\projects\\myapp\\venv'
+)
 
 # Stage 2: Build with MSBuild
-dev_run 'dotnet build' 'build' -sessionId 'myproject'
+mcp__pwsh-repl__pwsh(
+    mode='Invoke-DevRun',
+    script='dotnet build',
+    name='build',
+    sessionId='myproject'
+)
 
 # Stage 3: Test with Pytest (same venv)
-dev_run 'pytest tests/' 'test' -sessionId 'myproject' -environment 'C:\projects\myapp\venv'
+mcp__pwsh-repl__pwsh(
+    mode='Invoke-DevRun',
+    script='pytest tests/',
+    name='test',
+    sessionId='myproject',
+    environment='C:\\projects\\myapp\\venv'
+)
 
 # Analyze all errors across stages
+mcp__pwsh-repl__pwsh(script='''
 $allErrors = @()
-$allErrors += Get-StreamData 'lint' stderr | Find-Errors
-$allErrors += Get-StreamData 'build' stderr | Find-Errors
-$allErrors += Get-StreamData 'test' stderr | Find-Errors
+$allErrors += Get-StreamData lint Error | Find-Errors
+$allErrors += Get-StreamData build Error | Find-Errors
+$allErrors += Get-StreamData test Error | Find-Errors
 
 $allErrors | Group-By file | Format-Count
+''', sessionId='myproject')
 ```
 
 **Why this works:**
 
-- Each `dev_run` stores output in separate $env variables (lint_streams, build_streams,
-  test_streams)
+- Each `Invoke-DevRun` stores output in $global:DevRunCache with separate keys (lint, build, test)
 - Same sessionId maintains variable persistence across calls
 - Environment auto-detects venv (directory path) vs conda (name)
 - All streams accessible via `Get-StreamData` for cross-stage analysis
@@ -111,24 +135,38 @@ foreach ($file in $modified) {
 
 ```powershell
 # Session 1: Run tests and store results
-dev_run 'pytest tests/ -v' 'test' -sessionId 'analysis'
+mcp__pwsh-repl__pwsh(
+    mode='Invoke-DevRun',
+    script='pytest tests/ -v',
+    name='test',
+    sessionId='analysis'
+)
 
 # Session 2: Get error summary (variables still available)
-pwsh '$errors = Get-StreamData "test" stderr | Find-Errors; $errors.Count' -sessionId 'analysis'
+mcp__pwsh-repl__pwsh(
+    script='$errors = Get-StreamData test Error | Find-Errors; $errors.Count',
+    sessionId='analysis'
+)
 # Output: 42
 
 # Session 3: Group by file (still in same session)
-pwsh '$errors | Group-By file | Format-Count' -sessionId 'analysis'
+mcp__pwsh-repl__pwsh(
+    script='$errors | Group-By file | Format-Count',
+    sessionId='analysis'
+)
 
 # Session 4: Focus on specific file
-pwsh '$errors | Where-Object { $_.file -like "*auth*" } | Show' -sessionId 'analysis'
+mcp__pwsh-repl__pwsh(
+    script='$errors | Where-Object { $_.file -like "*auth*" } | Show',
+    sessionId='analysis'
+)
 ```
 
 **Why this works:**
 
-- All `pwsh` calls share sessionId='analysis'
-- Variables ($errors, $test) persist across calls
-- `dev_run` output stored in $env:test_streams (survives session)
+- All `mcp__pwsh-repl__pwsh` calls share sessionId='analysis'
+- Variables ($errors) persist across calls within session
+- `Invoke-DevRun` output stored in $global:DevRunCache (survives session)
 - Iterative refinement without re-running expensive operations
 
 ## 5. Background Execution with Monitoring
@@ -138,32 +176,33 @@ pwsh '$errors | Where-Object { $_.file -like "*auth*" } | Show' -sessionId 'anal
 **Solution:** Run build in background, poll streams for updates.
 
 ```powershell
-# Start long build in background (needs Task tool with run_in_background=true)
-# This example shows the pattern, actual background requires Task tool
+# Start long build with Invoke-DevRun
+mcp__pwsh-repl__pwsh(
+    mode='Invoke-DevRun',
+    script='dotnet build /m:1 /v:detailed',
+    name='longbuild',
+    timeoutSeconds=600
+)
 
-dev_run 'dotnet build /m:1 /v:detailed' 'longbuild'
+# In separate MCP call, monitor progress
+mcp__pwsh-repl__pwsh(script='''
+$stats = Get-DevRunCacheStats
+Write-Host "Cached runs: $($stats.TotalRuns), Latest: $(Get-Date)"
 
-# In separate session, monitor progress
-while ($true) {
-    $stats = pwsh 'Get-DevRunCacheStats' -sessionId 'monitor'
-    Write-Host "Cached runs: $($stats.TotalRuns), Latest: $(Get-Date)"
-
-    $errors = Get-StreamData 'longbuild' stderr | Find-Errors
-    if ($errors.Count -gt 0) {
-        Write-Host "Errors detected: $($errors.Count)"
-        $errors | Format-Count | Select-Object -First 5
-    }
-
-    Start-Sleep -Seconds 10
+$errors = Get-StreamData longbuild Error | Find-Errors
+if ($errors.Count -gt 0) {
+    Write-Host "Errors detected: $($errors.Count)"
+    $errors | Format-Count | Select-Object -First 5
 }
+''', sessionId='monitor')
 ```
 
 **Why this works:**
 
-- `dev_run` stores streams in $env immediately (accessible even during execution)
+- `Invoke-DevRun` stores streams in $global:DevRunCache immediately (accessible during execution)
 - `Get-DevRunCacheStats` shows all cached runs
-- Polling loop can run in separate PowerShell session
-- `Get-StreamData` retrieves partial results as build progresses
+- Separate mcp__pwsh-repl__pwsh calls can monitor progress
+- `Get-StreamData` retrieves results as build progresses
 
 ## 6. Sophisticated Output Formatting
 
@@ -174,7 +213,11 @@ formatting.
 
 ```powershell
 # Run TypeScript compiler
-dev_run 'tsc --noEmit' 'tsc'
+mcp__pwsh-repl__pwsh(
+    mode='Invoke-DevRun',
+    script='tsc --noEmit',
+    name='tsc'
+)
 
 # Extract errors with pattern
 $errors = Get-StreamData 'tsc' stderr |
@@ -211,10 +254,15 @@ stages.
 
 ```powershell
 # Run Docker build
-dev_run 'docker build --no-cache -t myapp .' 'docker'
+mcp__pwsh-repl__pwsh(
+    mode='Invoke-DevRun',
+    script='docker build --no-cache -t myapp .',
+    name='docker'
+)
 
 # Parse errors by stage
-Get-StreamData 'docker' stderr |
+mcp__pwsh-repl__pwsh(script='''
+Get-StreamData docker Error |
     Select-RegexMatch -Pattern (Get-Patterns -Name Docker).Pattern |
     Group-By stage |
     ForEach-Object {
@@ -225,13 +273,14 @@ Get-StreamData 'docker' stderr |
     }
 
 # Check for common Docker issues
-$output = Get-StreamData 'docker' stdout
-if ($output -match 'COPY failed') {
+$output = Get-StreamData docker Output
+if ($output -match ''COPY failed'') {
     Write-Host "File copy issue detected" -ForegroundColor Yellow
 }
-if ($output -match 'No space left') {
+if ($output -match ''No space left'') {
     Write-Host "Disk space issue" -ForegroundColor Red
 }
+''')
 ```
 
 **Why this works:**
@@ -267,13 +316,13 @@ $env:result | Find-Errors | Measure-Frequency
 
 ## Key Patterns
 
-**Pattern 1: dev_run + Get-StreamData**
+**Pattern 1: Invoke-DevRun + Get-StreamData**
 
-- Run tool with `dev_run` (stores all 6 streams)
+- Run tool with `Invoke-DevRun` via mode callback (stores all 6 streams)
 - Retrieve specific stream with `Get-StreamData`
 - Analyze with Find-Errors, Group-Similar, etc.
 
-**Pattern 2: pwsh + sessionId**
+**Pattern 2: mcp__pwsh-repl__pwsh + sessionId**
 
 - Use same sessionId for variable persistence
 - Build up analysis state incrementally
@@ -287,7 +336,7 @@ $env:result | Find-Errors | Measure-Frequency
 
 **Pattern 4: Environment isolation**
 
-- Pass -environment to dev_run for venv/conda activation
+- Pass environment parameter to mcp__pwsh-repl__pwsh for venv/conda activation
 - Auto-detects path (venv) vs name (conda)
 - Keeps dependencies isolated per tool
 

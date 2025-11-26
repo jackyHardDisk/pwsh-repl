@@ -1,23 +1,22 @@
 # Background Process Management
-# Integrates with dev_run cache system for output capture and analysis
+# Integrates with DevRun cache system for output capture and analysis
 
 function Invoke-BackgroundProcess
 {
     <#
     .SYNOPSIS
-    Start external process in background with output capture to dev_run cache.
+    Start external process in background with output capture to DevRun cache.
 
     .DESCRIPTION
     Runs process in background, capturing stdout/stderr to temporary files.
-    Compatible with dev_run cache - use Stop-BackgroundProcess to move output
+    Compatible with DevRun cache ($global:DevRunCache) - use Stop-BackgroundProcess to move output
     to cache for analysis with Get-StreamData, Get-BuildError, Group-BuildErrors, etc.
 
-    After stopping, output is stored in environment variables ($env:{name}_stdout,
-    $env:{name}_stderr, $env:{name}_streams) using the same format as dev_run,
-    making background process output compatible with all AgentBricks analysis functions.
+    After stopping, output is stored in $global:DevRunCache using the same format as Invoke-DevRun,
+    making background process output compatible with all Base/AgentBricks analysis functions.
 
     .PARAMETER Name
-    Unique name for this background process (used as dev_run cache key).
+    Unique name for this background process (used as DevRun cache key).
 
     .PARAMETER FilePath
     Executable to run (e.g., 'dotnet', 'python', 'node').
@@ -69,11 +68,11 @@ function Invoke-BackgroundProcess
     Test-BackgroundProcess -Name 'test'
 
     .NOTES
-    Integrates with dev_run cache system. After Stop-BackgroundProcess,
-    use Get-StreamData to retrieve output for analysis with all AgentBricks functions.
+    Integrates with DevRun cache system ($global:DevRunCache). After Stop-BackgroundProcess,
+    use Get-StreamData to retrieve output for analysis with all Base/AgentBricks functions.
 
-    Process output captured to temp files during execution, moved to environment
-    variables on stop for compatibility with Get-StreamData, Get-BuildError, etc.
+    Process output captured to temp files during execution, moved to DevRun cache
+    on stop for compatibility with Get-StreamData, Get-BuildError, etc.
     #>
     [CmdletBinding(DefaultParameterSetName = 'FilePath')]
     param(
@@ -92,8 +91,8 @@ function Invoke-BackgroundProcess
         [string]$WorkingDirectory = (Get-Location).Path
     )
 
-    # Initialize cache if needed
-    Initialize-DevRunCache
+    # Cache already initialized by SessionManager.cs on session creation
+    # ($global:DevRunCache, $global:DevRunCacheCounter, $global:DevRunScripts)
 
     # Create temp files for output
     $outFile = [System.IO.Path]::GetTempFileName()
@@ -109,13 +108,46 @@ function Invoke-BackgroundProcess
 
     if ($PSCmdlet.ParameterSetName -eq 'Script')
     {
+        # Auto-load modules from PWSH_MCP_MODULES for background processes
+        # This ensures background processes have same module availability as MCP sessions
+        $autoLoadScript = @'
+if ($env:PWSH_MCP_MODULES) {
+    $env:PWSH_MCP_MODULES -split ';' | Where-Object { $_ } | ForEach-Object {
+        Import-Module $_ -DisableNameChecking -ErrorAction SilentlyContinue
+    }
+}
+'@
+
+        $fullScript = $autoLoadScript + "`n" + $Script
         $startArgs['FilePath'] = 'pwsh'
-        $startArgs['ArgumentList'] = @('-NoProfile', '-Command', $Script)
+        $startArgs['ArgumentList'] = @('-NoProfile', '-Command', $fullScript)
     }
     else
     {
-        $startArgs['FilePath'] = $FilePath
-        $startArgs['ArgumentList'] = $ArgumentList
+        # FilePath mode - for external executables
+        # If running pwsh with -File, convert to -Command with dot-sourcing for module support
+        if ($FilePath -match '^pwsh(\.exe)?$' -and $ArgumentList[0] -eq '-File')
+        {
+            # PowerShell script file - dot-source it with module auto-loading
+            $scriptPath = $ArgumentList[1]
+            $autoLoadScript = @'
+if ($env:PWSH_MCP_MODULES) {
+    $env:PWSH_MCP_MODULES -split ';' | Where-Object { $_ } | ForEach-Object {
+        Import-Module $_ -DisableNameChecking -ErrorAction SilentlyContinue
+    }
+}
+'@
+
+            $dotSourceScript = $autoLoadScript + "`n. '$scriptPath'"
+            $startArgs['FilePath'] = $FilePath
+            $startArgs['ArgumentList'] = @('-NoProfile', '-Command', $dotSourceScript)
+        }
+        else
+        {
+            # Non-PowerShell executable or pwsh with other args - pass through as-is
+            $startArgs['FilePath'] = $FilePath
+            $startArgs['ArgumentList'] = $ArgumentList
+        }
     }
 
     try
@@ -172,20 +204,17 @@ function Stop-BackgroundProcess
 {
     <#
     .SYNOPSIS
-    Stop background process and move output to dev_run cache.
+    Stop background process and move output to DevRun cache.
 
     .DESCRIPTION
     Stops background process started with Invoke-BackgroundProcess and
-    moves captured output to dev_run cache for analysis with Get-StreamData,
-    Get-BuildError, Group-BuildErrors, and all other AgentBricks functions.
+    moves captured output to DevRun cache ($global:DevRunCache) for analysis with Get-StreamData,
+    Get-BuildError, Group-BuildErrors, and all other Base/AgentBricks functions.
 
-    Output is stored in the same environment variable format as dev_run:
-    - $env:{name}_stdout - Raw stdout text
-    - $env:{name}_stderr - Raw stderr text
-    - $env:{name}_streams - JSON hashtable with Error/Warning/Output streams
-    - $env:{name} - Command string for re-run capability
+    After stopping, output is stored in $global:DevRunCache using the same format as Invoke-DevRun,
+    making background process output compatible with all Base/AgentBricks analysis functions.
 
-    This makes background process output fully compatible with dev_run workflows.
+    This makes background process output fully compatible with Invoke-DevRun workflows.
 
     .PARAMETER Name
     Name of background process to stop.
@@ -214,10 +243,10 @@ function Stop-BackgroundProcess
     Stop-BackgroundProcess -Name 'test' -KeepFiles
 
     .NOTES
-    Output stored in dev_run cache under $env:{Name}_stdout, $env:{Name}_stderr, $env:{Name}_streams.
-    Compatible with all AgentBricks analysis functions.
+    Output stored in DevRun cache ($global:DevRunCache) under key Name.
+    Compatible with all Base/AgentBricks analysis functions.
 
-    Returns summary with error counts and top errors (like dev_run).
+    Returns summary with error counts and top errors (like Invoke-DevRun).
     #>
     [CmdletBinding()]
     param(
@@ -257,7 +286,7 @@ function Stop-BackgroundProcess
         ''
     }
 
-    # Store in dev_run cache (same format as dev_run tool)
+    # Store in DevRun cache (same format as Invoke-DevRun)
     Set-Item -Path "env:${Name}_stdout" -Value $stdout
     Set-Item -Path "env:${Name}_stderr" -Value $stderr
 
@@ -308,7 +337,7 @@ function Stop-BackgroundProcess
     # Remove from tracking
     $global:BrickBackgroundJobs.Remove($Name)
 
-    # Return summary (like dev_run)
+    # Return summary (like Invoke-DevRun)
     $errorCount = ($streams.Error | Where-Object { $_ }).Count
     $outputLines = ($streams.Output | Where-Object { $_ }).Count
 
@@ -326,7 +355,7 @@ function Get-BackgroundData
 {
     <#
     .SYNOPSIS
-    Retrieve background process output from dev_run cache.
+    Retrieve background process output from DevRun cache.
 
     .DESCRIPTION
     Convenience wrapper over Get-StreamData for background processes.

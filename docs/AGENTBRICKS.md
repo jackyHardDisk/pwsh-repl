@@ -219,7 +219,7 @@ Measure-Frequency | Export-ToFile -Path stats.json -Format Json
 # Export as JSON
 ```
 
-**Get-StreamData** - Retrieve specific stream from dev_run JSON storage
+**Get-StreamData** - Retrieve specific stream from DevRun cache (JSON storage)
 
 ```powershell
 # Get error stream from build run
@@ -237,7 +237,7 @@ Get-StreamData build Error | Measure-Frequency | Format-Count
 Get-StreamData build Error | Group-Similar -Threshold 0.85
 ```
 
-**Show-StreamSummary** - Display formatted summary of dev_run streams
+**Show-StreamSummary** - Display formatted summary of Invoke-DevRun cached streams
 
 ```powershell
 # Show default streams (Error, Warning)
@@ -674,11 +674,19 @@ Get-Patterns -Name "*company*"
 ### Workflow 5: DevRun Script Automation (NEW)
 
 ```powershell
-# Run build with dev_run (auto-registers script)
-dev_run "dotnet build" -name "build"
+# Run build with Invoke-DevRun (auto-registers script)
+mcp__pwsh-repl__pwsh(
+    mode='Invoke-DevRun',
+    script='dotnet build',
+    name='build'
+)
 
-# Run tests with dev_run (auto-registers script)
-dev_run "dotnet test" -name "test"
+# Run tests with Invoke-DevRun (auto-registers script)
+mcp__pwsh-repl__pwsh(
+    mode='Invoke-DevRun',
+    script='dotnet test',
+    name='test'
+)
 
 # View registered scripts
 Get-DevScripts
@@ -744,9 +752,9 @@ warning logged to stderr).
 
 **Solution: Just-In-Time Discovery**
 
-- MCP tool schemas: ~1400 tokens (test, pwsh, dev_run only)
-- AgentBricks functions: 0 tokens upfront (not in schemas)
-- Agents discover via `Get-Command -Module AgentBricks`
+- MCP tool schemas: ~1400 tokens (pwsh, stdin, list_sessions only)
+- Base/AgentBricks functions: 0 tokens upfront (not in schemas)
+- Agents discover via `Get-Command -Module Base` or `Get-Command -Module AgentBricks`
 - Full help via `Get-Help <function> -Full` (on-demand)
 - Pre-configured patterns: Loaded but not in tool descriptions
 
@@ -802,16 +810,17 @@ Watch-Command -Command "npm test" -Interval 30s -Alert "error"
 # Re-runs command, alerts on pattern match
 ```
 
-## Integration with dev_run Tool
+## Integration with Invoke-DevRun Workflow
 
-AgentBricks complements the dev_run MCP tool:
+AgentBricks complements the Invoke-DevRun function (Base module):
 
-**dev_run responsibilities:**
+**Invoke-DevRun responsibilities:**
 
-- Execute scripts
-- Capture stdout/stderr separately
-- Store in `$env:name_stdout`, `$env:name_stderr`, `$env:name`
+- Execute scripts via pwsh tool mode callback
+- Capture stdout/stderr/streams separately
+- Store in `$global:DevRunCache` (JSON structure)
 - Generate condensed summary (error/warning counts)
+- Set environment variables (`$env:name_stdout`, `$env:name_stderr`)
 
 **AgentBricks responsibilities:**
 

@@ -13,12 +13,11 @@ Code with auto-loading AgentBricks module.
 - Session state survives across tool calls
 - Multiple independent sessions per MCP server instance
 
-**4 MCP Tools**
+**3 MCP Tools**
 
-- `test` - Simple connectivity test
 - `stdin` - Write to session-specific stdin pipes
-- `pwsh` - Execute PowerShell with session persistence
-- `dev_run` - Iterative development workflow with output capture and summarization
+- `pwsh` - Execute PowerShell with session persistence and mode callbacks
+- `list_sessions` - List active PowerShell session IDs
 
 **AgentBricks Module**
 
@@ -37,10 +36,11 @@ Code with auto-loading AgentBricks module.
 
 **Token Efficiency**
 
-- Tool schemas: ~1,900 tokens (4 tools)
+- Tool schemas: ~1,400 tokens (3 tools)
+- Base module functions: 0 tokens upfront (discovered on-demand)
 - AgentBricks functions: 0 tokens upfront (discovered on-demand)
 - LoraxMod functions: 0 tokens upfront (discovered on-demand)
-- dev_run summaries: 99% reduction vs raw output
+- Invoke-DevRun summaries: 99% reduction vs raw output
 
 ## Quick Start
 
@@ -71,27 +71,13 @@ Adjust path to your build output directory.
 ### Test
 
 ```powershell
-# In Claude Code, call the test tool
-test("Claude")
-# Returns: Hello, Claude!
+# Import Base module to verify setup
+Import-Module C:\Path\To\pwsh-repl\src\pwsh-repl\Modules\Base\Base.psd1
+Get-Command -Module Base | Measure-Object
+# Should show 39 functions
 ```
 
 ## Tools Reference
-
-### test - Simple Test
-
-**Purpose:** Verify MCP connection
-
-**Parameters:**
-
-- `name` (optional, default: "World") - Name to greet
-
-**Example:**
-
-```powershell
-test("Agent")
-# Returns: Hello, Agent!
-```
 
 ### pwsh - PowerShell Execution
 
@@ -126,59 +112,37 @@ pwsh("$myVar", "session2")
 pwsh("Get-Process | Where-Object { $_.CPU -gt 100 } | Select-Object -First 5", "default")
 ```
 
-### dev_run - Iterative Development Wrapper
+### stdin - Control Child Process Input
 
-**Purpose:** Execute scripts with output capture, store in session variables, return
-condensed summaries
+**Purpose:** Write data to stdin pipes for child processes or signal EOF
 
 **Parameters:**
 
-- `script` (required for first run, optional for re-run) - PowerShell script to execute
-- `name` (optional) - Name for stored results (generates timestamp-based name if
-  omitted)
-- `sessionId` (optional, default: "default") - Session ID
-- `environment` (optional) - Conda/venv environment to activate
-
-**Stores:**
-
-- `$env:{name}_stdout` - Standard output
-- `$env:{name}_stderr` - Error output
-- `$env:{name}` - Original script (re-run capability)
-- `$env:{name}_timestamp` - Execution timestamp
-
-**Returns:** Condensed summary with error/warning counts, top issues, output line count
+- `data` (optional) - String to write to stdin
+- `close` (optional, default: false) - Close write end to signal EOF
+- `sessionId` (optional, default: "default") - Target session
 
 **Example:**
 
-```powershell
-# Run build
-dev_run("dotnet build", "build")
+```python
+# Write data to stdin
+mcp__pwsh-repl__stdin(data='line1\nline2\n', sessionId='repl')
 
-# Output:
-# Script: dotnet build
-# Exit Code: 1
-#
-# Errors:   12  (5 unique)
-# Warnings:  3  (2 unique)
-# Output:   247 lines
-#
-# Top Errors:
-#     8x: CS0103: The name 'foo' does not exist in the current context
-#     3x: CS0246: The type or namespace name 'Bar' could not be found
-#     1x: CS1002: ; expected
-#
-# Top Warnings:
-#     2x: CS0168: The variable 'unused' is declared but never used
-#     1x: CS0649: Field is never assigned to
-#
-# Stored: $env:build_stdout, $env:build_stderr
-# Re-run: dev-run(name="build")
+# Close stdin to signal EOF
+mcp__pwsh-repl__stdin(close=True, sessionId='repl')
+```
 
-# Analyze errors with AgentBricks
-pwsh('$env:build_stderr | Find-Errors | Measure-Frequency | Format-Count')
+### list_sessions - List Active Sessions
 
-# Re-run saved script
-dev_run(name="build")
+**Purpose:** Show all active PowerShell session IDs
+
+**Parameters:** None
+
+**Example:**
+
+```python
+mcp__pwsh-repl__list_sessions()
+# Returns: ['default', 'gary_pwsh_repl', 'build_session']
 ```
 
 ## AgentBricks Module
@@ -210,11 +174,16 @@ Clang, CMake, and 30+ more.
 **Usage example:**
 
 ```powershell
-# Run tests with dev_run
-dev_run("pytest tests/", "test")
+# Run tests with Invoke-DevRun (via pwsh mode callback)
+mcp__pwsh-repl__pwsh(
+    mode='Invoke-DevRun',
+    script='pytest tests/',
+    name='test',
+    kwargs={'Streams': ['Error', 'Warning']}
+)
 
 # Analyze failures with AgentBricks
-pwsh('$env:test_stderr | Extract-Regex -Pattern (Get-Patterns -Name "Pytest-Fail").Pattern | Format-Count')
+mcp__pwsh-repl__pwsh(script='Get-StreamData test Error | Select-RegexMatch -Pattern (Get-Patterns -Name "Pytest-Fail").Pattern | Format-Count')
 
 # Output:
 #   8x: tests/test_app.py::test_login
@@ -244,11 +213,11 @@ pwsh('$env:test_stderr | Extract-Regex -Pattern (Get-Patterns -Name "Pytest-Fail
 **Completed:**
 
 - Core MCP server with stdio protocol
-- 3 tools: test, pwsh, dev_run
+- 3 tools: pwsh (with mode callback), stdin, list_sessions
 - SessionManager with named sessions
 - PowerShellPool with channel-based pattern
-- AgentBricks module (20 functions, 40+ patterns)
-- Auto-loading module on session creation
+- Base module (39 functions), AgentBricks (5 functions + 43 patterns)
+- Auto-loading modules on session creation (Base, AgentBricks, LoraxMod, TokenCounter)
 - Build targets for module copying
 
 **Testing In Progress:**
@@ -310,18 +279,23 @@ See [docs/DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md) for detailed rationale.
 ### Workflow 1: Build Error Analysis
 
 ```powershell
-# Run build with capture
-dev_run("dotnet build", "build")
+# Run build with Invoke-DevRun (mode callback)
+mcp__pwsh-repl__pwsh(
+    mode='Invoke-DevRun',
+    script='dotnet build',
+    name='build',
+    kwargs={'Streams': ['Error', 'Warning']}
+)
 
 # Summary shows top errors:
 #   8x: CS0103: The name 'foo' does not exist
 
 # Deep dive with AgentBricks
-pwsh(@'
-$env:build_stderr |
-    Extract-Regex -Pattern (Get-Patterns -Name "MSBuild").Pattern |
+mcp__pwsh-repl__pwsh(script='''
+Get-StreamData build Error |
+    Select-RegexMatch -Pattern (Get-Patterns -Name "MSBuild").Pattern |
     Where-Object { $_.Code -eq "CS0103" }
-'@)
+''')
 
 # Shows all CS0103 occurrences with file/line info
 ```
@@ -330,14 +304,18 @@ $env:build_stderr |
 
 ```powershell
 # Discover test command
-pwsh("Find-ProjectTools")
+mcp__pwsh-repl__pwsh(script='Find-ProjectTools')
 # Output: JavaScript | npm | npm run test | test
 
-# Run tests
-dev_run("npm run test", "test")
+# Run tests with Invoke-DevRun
+mcp__pwsh-repl__pwsh(
+    mode='Invoke-DevRun',
+    script='npm run test',
+    name='test'
+)
 
 # Extract failures
-pwsh('$env:test_stderr | Extract-Regex -Pattern (Get-Patterns -Name "Jest").Pattern | Format-Count')
+mcp__pwsh-repl__pwsh(script='Get-StreamData test Error | Select-RegexMatch -Pattern (Get-Patterns -Name "Jest").Pattern | Format-Count')
 ```
 
 ### Workflow 3: Learn Custom Tool

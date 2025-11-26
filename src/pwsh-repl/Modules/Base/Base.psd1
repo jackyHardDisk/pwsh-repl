@@ -6,7 +6,7 @@
     Author = 'pwsh-repl'
     CompanyName = 'pwsh-repl'
     Copyright = '(c) 2024 pwsh-repl. All rights reserved.'
-    Description = 'Foundational functions for PowerShell MCP Server execution, transformation, and state management. Provides dev_run workflow with automatic caching, stream capture, and output analysis. Cache initialized by C# SessionManager as ConcurrentDictionary.'
+    Description = 'Foundational functions for PowerShell MCP Server execution, transformation, and state management. Provides Invoke-DevRun workflow with automatic caching, stream capture, and output analysis. Cache initialized by C# SessionManager as ConcurrentDictionary.'
     PowerShellVersion = '7.0'
     FunctionsToExport = @(
         # Core execution

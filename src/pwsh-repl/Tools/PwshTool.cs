@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using System.IO;
+using System.Linq;
 using System.Management.Automation;
 using System.Text;
 using System.Text.Json;
@@ -16,6 +18,7 @@ namespace PowerShellMcpServer.pwsh_repl.Tools;
 public class PwshTool
 {
     private readonly SessionManager _sessionManager;
+    private static int _bgCounter = 0;
 
     public PwshTool(SessionManager sessionManager)
     {
@@ -49,7 +52,10 @@ public class PwshTool
         string initialSessionState = "default",
         [Description(
             "Timeout in seconds (default: 60). Script execution will be terminated if it exceeds this duration.")]
-        int timeoutSeconds = 60)
+        int timeoutSeconds = 60,
+        [Description(
+            "Run script in background and return immediately. Use PwshOutput tool to monitor progress. Incompatible with mode parameter.")]
+        bool runInBackground = false)
     {
         var session =
             _sessionManager.GetOrCreateSession(sessionId, environment,
@@ -60,6 +66,38 @@ public class PwshTool
             // Validation: either script or mode must be provided
             if (string.IsNullOrWhiteSpace(script) && string.IsNullOrWhiteSpace(mode))
                 return "Error: Either 'script' or 'mode' parameter must be provided.";
+
+            // Validation: mode and runInBackground are incompatible
+            if (!string.IsNullOrWhiteSpace(mode) && runInBackground)
+                return "Error: 'mode' and 'run_in_background' are incompatible. Mode callbacks require synchronous execution. Use run_in_background with raw script only.";
+
+            // Background process execution
+            if (runInBackground)
+            {
+                // Auto-generate name if not provided
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    var bgNum = System.Threading.Interlocked.Increment(ref _bgCounter);
+                    name = $"bg_{bgNum}";
+                }
+
+                // Use here-strings for safe script escaping
+                var bgScript = $@"Invoke-BackgroundProcess -Name '{name}' -Script @'
+{script}
+'@";
+
+                // Start background process
+                session.PowerShell.AddScript(bgScript);
+                var bgResult = session.PowerShell.Invoke();
+                session.PowerShell.Commands.Clear();
+                session.PowerShell.Streams.ClearStreams();
+
+                // Get initial output after brief delay
+                System.Threading.Thread.Sleep(100);
+                var initialOutput = GetInitialOutput(session, name);
+
+                return $"Background process '{name}' started\n\n{initialOutput}";
+            }
 
             // Build PowerShell script based on mode
             string executionScript;
@@ -319,6 +357,45 @@ if (-not $global:DevRunCache.ContainsKey('{name}')) {{
         catch (Exception ex)
         {
             return $"[Error rendering format objects: {ex.Message}]";
+        }
+    }
+
+    /// <summary>
+    ///     Get initial output from background process temp files.
+    ///     Reads first 10 lines from stdout after brief startup delay.
+    /// </summary>
+    private string GetInitialOutput(PowerShellSession session, string name, int maxLines = 10)
+    {
+        try
+        {
+            // Query background job info to get temp file path
+            var getInfoScript = $"$global:BrickBackgroundJobs['{name}'].OutFile";
+            session.PowerShell.AddScript(getInfoScript);
+            var infoResult = session.PowerShell.Invoke();
+            session.PowerShell.Commands.Clear();
+            session.PowerShell.Streams.ClearStreams();
+
+            var outFile = infoResult.FirstOrDefault()?.ToString();
+            if (string.IsNullOrWhiteSpace(outFile) || !File.Exists(outFile))
+                return "(No output yet)";
+
+            // Read first few lines from temp file using shared access
+            // FileShare.ReadWrite allows reading while PowerShell is still writing
+            using var stream = new FileStream(outFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream);
+
+            var lines = new List<string>();
+            while (lines.Count < maxLines && reader.ReadLine() is { } line)
+                lines.Add(line);
+
+            if (lines.Count == 0)
+                return "(No output yet)";
+
+            return string.Join("\n", lines);
+        }
+        catch (Exception ex)
+        {
+            return $"(Error reading initial output: {ex.Message})";
         }
     }
 }

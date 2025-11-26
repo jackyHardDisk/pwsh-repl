@@ -591,8 +591,8 @@ function Set-EnvironmentTee
     Captures all processes to $env:procs, displays first 5
 
     .EXAMPLE
-    PS> dev_run("dotnet build", "build")
-    PS> $env:build_stderr | Set-EnvironmentTee -Name "build_archive" | Find-Errors | Show -Top 10
+    PS> Invoke-DevRun -Script 'dotnet build' -Name build
+    PS> Get-StreamData build Error | Set-EnvironmentTee -Name "build_archive" | Find-Errors | Show -Top 10
     Archives full output, shows top 10 errors
 
     .EXAMPLE

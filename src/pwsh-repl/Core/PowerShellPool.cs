@@ -123,13 +123,18 @@ public class PowerShellPool : IDisposable
 public class PowerShellSession : IDisposable
 {
     public PowerShellSession(PowerShell powerShell, Runspace runspace)
+        : this(powerShell, runspace, null)
+    {
+    }
+
+    public PowerShellSession(PowerShell powerShell, Runspace runspace, AnonymousPipeServerStream? stdinPipe)
     {
         PowerShell = powerShell ?? throw new ArgumentNullException(nameof(powerShell));
         Runspace = runspace ?? throw new ArgumentNullException(nameof(runspace));
 
-        // Create per-session stdin pipe
-        // PipeDirection.Out means server writes, client reads
-        StdinPipe = new AnonymousPipeServerStream(PipeDirection.Out, HandleInheritability.Inheritable);
+        // Use provided stdin pipe or create new one
+        // Pipe must exist BEFORE any child processes are spawned to prevent stdin hangs
+        StdinPipe = stdinPipe ?? new AnonymousPipeServerStream(PipeDirection.Out, HandleInheritability.Inheritable);
 
         // Note: We keep the client handle open so writes don't fail with "broken pipe"
         // Child processes will inherit a copy of the handle when they spawn
