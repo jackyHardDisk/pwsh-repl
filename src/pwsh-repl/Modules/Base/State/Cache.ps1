@@ -26,7 +26,7 @@ function Get-CachedStreamData
     Significantly faster than parsing JSON on every Get-StreamData call.
 
     .PARAMETER Name
-    Script name (e.g., "build" from dev_run with name="build").
+    Script name (e.g., "build" from Invoke-DevRun -Name build).
 
     .PARAMETER Stream
     Stream to retrieve: Error, Warning, Verbose, Debug, Information, Output.
@@ -43,8 +43,8 @@ function Get-CachedStreamData
     Invalidates cache and reloads from $env:build_streams
 
     .NOTES
-    Cache automatically invalidated when dev_run executes with same name.
-    Use -Force to manually invalidate (e.g., if $env was modified externally).
+    Cache automatically invalidated when Invoke-DevRun executes with same name.
+    Use -Force to manually invalidate (e.g., if cache was modified externally).
     #>
     [CmdletBinding()]
     param(
@@ -91,7 +91,7 @@ function Get-CachedStreamData
 
     if (-not $json)
     {
-        Write-Error "No stream data found for '$Name'. Run dev_run with name='$Name' first."
+        Write-Error "No stream data found for '$Name'. Run Invoke-DevRun -Name '$Name' first."
         return
     }
 
@@ -128,7 +128,7 @@ function Clear-DevRunCache
 
     .DESCRIPTION
     Invalidates cache entries for DevRun stream data. Useful after running
-    dev_run again with same name to ensure fresh data is loaded.
+    Invoke-DevRun again with same name to ensure fresh data is loaded.
 
     Can clear specific script's cache or all cached data.
 
@@ -257,7 +257,7 @@ function Add-DevScript
     global script registry. This enables script invocation, chaining, and
     tracking of script execution history.
 
-    Typically called automatically by dev_run, but can be used manually to
+    Typically called automatically by Invoke-DevRun, but can be used manually to
     register scripts for invocation.
 
     .PARAMETER Name
@@ -349,7 +349,7 @@ function Get-DevScripts
     Dependencies: (none)
 
     .NOTES
-    Scripts registered automatically by dev_run or manually via Add-DevScript.
+    Scripts registered automatically by Invoke-DevRun or manually via Add-DevScript.
     #>
     [CmdletBinding()]
     param(
@@ -566,7 +566,7 @@ function Invoke-DevScript
     Execute a registered script from $global:DevRunScripts registry.
 
     .DESCRIPTION
-    Retrieves and executes a script previously registered via Add-DevScript or dev_run.
+    Retrieves and executes a script previously registered via Add-DevScript or Invoke-DevRun.
     Useful for re-running saved scripts, chaining scripts, or building workflows.
 
     Script is executed in the current PowerShell session with access to all variables
@@ -594,7 +594,7 @@ function Invoke-DevScript
     Executes script and captures output
 
     .NOTES
-    Script must be registered via Add-DevScript or dev_run first.
+    Script must be registered via Add-DevScript or Invoke-DevRun first.
     Updates $LASTEXITCODE based on script execution.
     #>
     [CmdletBinding()]

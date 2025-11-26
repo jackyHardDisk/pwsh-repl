@@ -282,26 +282,26 @@ function Get-StreamData
 {
     <#
     .SYNOPSIS
-    Retrieve specific stream data from dev_run JSON storage with caching.
+    Retrieve specific stream data from Invoke-DevRun cached storage.
 
     .DESCRIPTION
     Extracts a specific PowerShell stream (Error, Warning, Verbose, Debug, Information, Output)
-    from dev_run's JSON hashtable storage. Returns raw array of stream items for pipeline processing.
+    from DevRun cache ($global:DevRunCache). Returns raw array of stream items for pipeline processing.
 
-    Uses $global:DevRunCache for performance - first access loads and caches JSON from $env,
+    Uses $global:DevRunCache for performance - first access loads and caches data,
     subsequent accesses retrieve from cache (much faster for repeated queries).
 
-    Used to access individual streams from dev_run results for post-hoc analysis.
+    Used to access individual streams from Invoke-DevRun results for post-hoc analysis.
     Complements Show-StreamSummary which displays formatted summaries.
 
     .PARAMETER Name
-    Name used in dev_run (e.g., "build" for dev_run(..., name="build")).
+    Name used in Invoke-DevRun (e.g., "build" for Invoke-DevRun -Name build).
 
     .PARAMETER Stream
     Stream to retrieve: Error, Warning, Verbose, Debug, Information, or Output.
 
     .PARAMETER Force
-    Force reload from $env (invalidate cache). Use if $env was modified externally.
+    Force reload from cache (invalidate local copy). Use if cache was modified externally.
 
     .EXAMPLE
     PS> Get-StreamData -Name "build" -Stream Error
@@ -324,12 +324,12 @@ function Get-StreamData
 
     .EXAMPLE
     PS> Get-StreamData -Name "build" -Stream Error -Force
-    # Forces reload from $env:build_streams (cache bypassed)
+    # Forces reload from cache (local copy bypassed)
 
     .NOTES
-    Requires dev_run to have been executed with stream storage enabled (default behavior).
+    Requires Invoke-DevRun to have been executed with stream storage enabled (default behavior).
     Returns $null if name or stream not found.
-    Cache automatically invalidated when dev_run executes with same name.
+    Cache automatically invalidated when Invoke-DevRun executes with same name.
     Performance: ~10-100x faster for repeated access (no JSON parsing).
     #>
     [CmdletBinding()]
@@ -357,7 +357,7 @@ function Get-StreamData
 
     if (-not $json)
     {
-        Write-Error "No stream data found for '$Name'. Run dev_run with name='$Name' first."
+        Write-Error "No stream data found for '$Name'. Run Invoke-DevRun -Name '$Name' first."
         return
     }
 
@@ -383,19 +383,19 @@ function Show-StreamSummary
 {
     <#
     .SYNOPSIS
-    Display formatted summary of dev_run stream data.
+    Display formatted summary of Invoke-DevRun stream data.
 
     .DESCRIPTION
-    Shows frequency analysis summary for selected PowerShell streams from dev_run results.
+    Shows frequency analysis summary for selected PowerShell streams from Invoke-DevRun results.
     Displays count, unique count, and top items for each requested stream.
 
-    Mimics dev_run's built-in summary but allows custom stream selection and post-hoc analysis.
+    Mimics Invoke-DevRun's built-in summary but allows custom stream selection and post-hoc analysis.
 
     .PARAMETER Name
-    Name used in dev_run (e.g., "build" for dev_run(..., name="build")).
+    Name used in Invoke-DevRun (e.g., "build" for Invoke-DevRun -Name build).
 
     .PARAMETER Streams
-    Streams to include in summary. Default: Error, Warning (matches dev_run default).
+    Streams to include in summary. Default: Error, Warning (matches Invoke-DevRun default).
 
     .PARAMETER TopCount
     Number of top items to show per stream. Default: 5.
@@ -420,7 +420,7 @@ function Show-StreamSummary
     PS> Show-StreamSummary -Name "test" -Streams Error -TopCount 10
 
     .NOTES
-    Requires dev_run to have been executed with stream storage enabled (default behavior).
+    Requires Invoke-DevRun to have been executed with stream storage enabled (default behavior).
     Use Get-StreamData for raw stream access and custom analysis pipelines.
     #>
     [CmdletBinding()]

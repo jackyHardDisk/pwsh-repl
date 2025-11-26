@@ -97,22 +97,34 @@ public class SessionManager : IDisposable
         var pwsh = PowerShell.Create();
         pwsh.Runspace = runspace;
 
-        // Note: stdin handle is closed at Windows API level in Program.cs
-        // Child processes inherit INVALID_HANDLE_VALUE for stdin, preventing hangs
+        // Create stdin pipe BEFORE any child processes are spawned (environment activation, module loading)
+        // Without this, conda/python calls during ActivateEnvironment hang waiting for stdin
+        AnonymousPipeServerStream? stdinPipe = null;
+        IntPtr originalStdin = IntPtr.Zero;
 
-        // Activate environment if specified (BEFORE modules)
-        if (!string.IsNullOrEmpty(environment)) ActivateEnvironment(pwsh, environment);
+        if (OperatingSystem.IsWindows())
+        {
+            stdinPipe = new AnonymousPipeServerStream(PipeDirection.Out, HandleInheritability.Inheritable);
+            originalStdin = NativeMethods.GetStdHandle(NativeMethods.STD_INPUT_HANDLE);
+            NativeMethods.SetStdHandle(NativeMethods.STD_INPUT_HANDLE,
+                stdinPipe.ClientSafePipeHandle.DangerousGetHandle());
+        }
 
-        // Pre-load Base module (foundation for all core functions)
-        LoadModule(pwsh, "Base",
-            Path.Combine(AppContext.BaseDirectory, "Modules", "Base"));
+        try
+        {
+            // Activate environment if specified (BEFORE modules)
+            if (!string.IsNullOrEmpty(environment)) ActivateEnvironment(pwsh, environment);
 
-        // Load additional modules from PWSH_MCP_MODULES environment variable
-        // (includes AgentBricks, LoraxMod, SessionLog, TokenCounter, etc.)
-        LoadAdditionalModules(pwsh);
+            // Pre-load Base module (foundation for all core functions)
+            LoadModule(pwsh, "Base",
+                Path.Combine(AppContext.BaseDirectory, "Modules", "Base"));
 
-        // Initialize ConcurrentDictionary for DevRun cache (in C# for thread-safety)
-        pwsh.AddScript(@"
+            // Load additional modules from PWSH_MCP_MODULES environment variable
+            // (includes AgentBricks, LoraxMod, SessionLog, TokenCounter, etc.)
+            LoadAdditionalModules(pwsh);
+
+            // Initialize ConcurrentDictionary for DevRun cache (in C# for thread-safety)
+            pwsh.AddScript(@"
 if (-not $global:DevRunCache) {
     $global:DevRunCache = [System.Collections.Concurrent.ConcurrentDictionary[string, object]]::new()
 }
@@ -120,10 +132,19 @@ if (-not $global:DevRunCacheCounter) {
     $global:DevRunCacheCounter = 0
 }
 ").Invoke();
-        pwsh.Commands.Clear();
-        pwsh.Streams.ClearStreams();
+            pwsh.Commands.Clear();
+            pwsh.Streams.ClearStreams();
 
-        return new PowerShellSession(pwsh, runspace);
+            return new PowerShellSession(pwsh, runspace, stdinPipe);
+        }
+        finally
+        {
+            // Restore original stdin handle
+            if (OperatingSystem.IsWindows() && originalStdin != IntPtr.Zero)
+            {
+                NativeMethods.SetStdHandle(NativeMethods.STD_INPUT_HANDLE, originalStdin);
+            }
+        }
     }
 
     private void ActivateEnvironment(PowerShell pwsh, string environment)
@@ -539,4 +560,90 @@ if (-not $global:DevRunCacheCounter) {
     {
         return _sessions.Keys.OrderBy(k => k);
     }
+
+    /// <summary>
+    ///     Get health information for a specific session.
+    /// </summary>
+    public SessionHealthInfo GetSessionHealth(string sessionId)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session))
+            return new SessionHealthInfo(sessionId, false, "NotFound", "NotFound", 0, false, false);
+
+        try
+        {
+            var runspaceState = session.Runspace?.RunspaceStateInfo.State.ToString() ?? "Disposed";
+            var invocationState = session.PowerShell?.InvocationStateInfo.State.ToString() ?? "Disposed";
+            var errorCount = session.PowerShell?.Streams.Error.Count ?? -1;
+            var stdinAvailable = session.StdinPipe != null;
+
+            // Determine if healthy
+            var isHealthy = runspaceState == "Opened" &&
+                           (invocationState == "NotStarted" || invocationState == "Completed") &&
+                           errorCount >= 0;
+
+            // Determine if recoverable (can be cleared and reused vs needs full removal)
+            var isRecoverable = runspaceState == "Opened";
+
+            return new SessionHealthInfo(
+                sessionId,
+                isHealthy,
+                runspaceState,
+                invocationState,
+                errorCount,
+                stdinAvailable,
+                isRecoverable);
+        }
+        catch (Exception ex)
+        {
+            return new SessionHealthInfo(sessionId, false, "Error", ex.Message, -1, false, false);
+        }
+    }
+
+    /// <summary>
+    ///     Get health information for all sessions.
+    /// </summary>
+    public IEnumerable<SessionHealthInfo> GetAllSessionHealth()
+    {
+        return _sessions.Keys.Select(GetSessionHealth).ToList();
+    }
+
+    /// <summary>
+    ///     Remove all sessions.
+    /// </summary>
+    public int RemoveAllSessions()
+    {
+        var count = 0;
+        foreach (var sessionId in _sessions.Keys.ToList())
+        {
+            RemoveSession(sessionId);
+            count++;
+        }
+        return count;
+    }
+
+    /// <summary>
+    ///     Remove all unhealthy sessions.
+    /// </summary>
+    public int RemoveUnhealthySessions()
+    {
+        var count = 0;
+        foreach (var health in GetAllSessionHealth().Where(h => !h.IsHealthy))
+        {
+            RemoveSession(health.SessionId);
+            count++;
+        }
+        return count;
+    }
 }
+
+/// <summary>
+///     Health information for a PowerShell session.
+/// </summary>
+public record SessionHealthInfo(
+    string SessionId,
+    bool IsHealthy,
+    string RunspaceState,
+    string InvocationState,
+    int ErrorCount,
+    bool StdinAvailable,
+    bool IsRecoverable);

@@ -87,7 +87,7 @@ Migrated to Base:
 
 0.1.1 - Background Process Management
 - Background process execution, monitoring
-- dev_run cache integration
+- DevRun cache integration (Invoke-DevRun workflow)
 - PowerShell scripts and external executables
 
 0.1.0 - Initial POC Release
