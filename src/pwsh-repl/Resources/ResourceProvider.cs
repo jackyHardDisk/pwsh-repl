@@ -351,14 +351,16 @@ Universal dispatcher pattern achieving 92% token reduction (550 tokens saved) by
 
 Instead of separate MCP tools for each function, use mode parameter to call Base module functions.
 
-**OLD (40+ tools):**
+**Without mode callback (hypothetical 40+ tools):**
 ```python
-mcp__pwsh-repl__dev_run(script='dotnet build', name='build')
+# Would require separate MCP tools for each function
+mcp__pwsh-repl__invoke_devrun(script='dotnet build', name='build')
 mcp__pwsh-repl__format_count(script='Get-Content errors.txt | Group-Object')
 ```
 
-**NEW (1 tool with mode):**
+**With mode callback (4 tools: pwsh, stdin, list_sessions, pwsh_output):**
 ```python
+# Single pwsh tool with mode parameter calls any Base module function
 mcp__pwsh-repl__pwsh(mode='Invoke-DevRun', script='dotnet build', name='build')
 mcp__pwsh-repl__pwsh(mode='Format-Count', script='Get-Content errors.txt | Group-Object')
 ```
@@ -372,6 +374,14 @@ mcp__pwsh-repl__pwsh(mode='Format-Count', script='Get-Content errors.txt | Group
 - **sessionId** (optional, default: 'default') - Named session
 - **environment** (optional) - venv path or conda name
 - **timeoutSeconds** (optional, default: 60) - Execution timeout
+- **runInBackground** (optional, default: false) - Execute in background thread
+
+## Available Tools
+
+- **pwsh** - Execute PowerShell with mode callback pattern
+- **stdin** - Write to session stdin pipe or close it
+- **list_sessions** - List sessions, check health, cleanup unhealthy
+- **pwsh_output** - Retrieve output from background executions
 
 ## How It Works
 
@@ -465,6 +475,7 @@ mcp__pwsh-repl__pwsh(
 
 **C# Compiler Errors:**
 ```python
+# Step 1: Capture build output
 mcp__pwsh-repl__pwsh(
     mode='Invoke-DevRun',
     script='dotnet build',
@@ -472,17 +483,16 @@ mcp__pwsh-repl__pwsh(
     kwargs={'Streams': ['Error']}
 )
 
+# Step 2: Analyze cached errors (direct script, not mode)
 mcp__pwsh-repl__pwsh(
-    mode='Get-StreamData',
-    script='Group-BuildErrors -Pattern ""MSBuild-Error"" | Format-Count',
-    kwargs={'Name': 'build', 'Stream': 'Error'}
+    script='Get-StreamData build Error | Group-BuildErrors | Format-Count'
 )
 ```
 
 ## Error Analysis (Simple - Fuzzy Only)
 
 ```python
-# Capture with dev_run
+# Capture with Invoke-DevRun via mode callback
 mcp__pwsh-repl__pwsh(
     mode='Invoke-DevRun',
     script='npm test',
@@ -501,27 +511,36 @@ mcp__pwsh-repl__pwsh(
 ```python
 # 1. Launch non-blocking
 mcp__pwsh-repl__pwsh(
-    mode='Invoke-BackgroundProcess',
-    kwargs={'Command': 'python', 'Arguments': ['-m', 'app.server']}
+    script='Invoke-BackgroundProcess -Command python -Arguments @(\"-m\", \"app.server\")'
 )
 
 # 2. Check status
-mcp__pwsh-repl__pwsh(mode='Test-BackgroundProcess')
+mcp__pwsh-repl__pwsh(script='Test-BackgroundProcess')
 
-# 3. Get live output
-mcp__pwsh-repl__pwsh(
-    mode='Get-BackgroundData',
-    kwargs={'Last': 50}
-)
+# 3. Get live output (last 50 lines)
+mcp__pwsh-repl__pwsh(script='Get-BackgroundData -Last 50')
 
 # 4. Analyze errors from output
 mcp__pwsh-repl__pwsh(
-    mode='Get-BackgroundData',
-    script='Find-Errors | Group-Similar | Format-Count'
+    script='Get-BackgroundData | Find-Errors | Group-Similar | Format-Count'
 )
 
 # 5. Kill when done
-mcp__pwsh-repl__pwsh(mode='Stop-BackgroundProcess')
+mcp__pwsh-repl__pwsh(script='Stop-BackgroundProcess')
+```
+
+## Background Execution (runInBackground)
+
+```python
+# Run long script in background
+mcp__pwsh-repl__pwsh(
+    script='dotnet build --no-incremental',
+    runInBackground=True,
+    name='long_build'
+)
+
+# Check output later with pwsh_output tool
+mcp__pwsh-repl__pwsh_output(name='long_build')
 ```
 
 ## Git Status Extraction
