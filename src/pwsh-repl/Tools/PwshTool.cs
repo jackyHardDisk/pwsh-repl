@@ -27,8 +27,7 @@ public class PwshTool
     }
 
     [McpServerTool]
-    [Description(
-        "Execute PowerShell with persistent sessions. Modules auto-load from PWSH_MCP_MODULES. IMPORTANT: Automatically fetch pwsh_mcp_modules://modules on first use to discover available module functions and PowerShell examples. Use mode parameter to call Base module functions (e.g., mode='Invoke-DevRun'). All executions auto-cache in $global:DevRunCache.")]
+    [Description(ToolDescriptions.PwshToolDescription)]
     public string Pwsh(
         [Description("PowerShell script to execute (optional if mode is provided)")]
         string? script = null,

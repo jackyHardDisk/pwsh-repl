@@ -84,7 +84,7 @@ function Invoke-StreamingParser {
         [string]$ParserScript,
 
         [Parameter(ValueFromPipeline, ValueFromPipelineByPropertyName)]
-        [Alias('FullName', 'Path')]
+        [Alias('FullName', 'Path', 'FilePath')]
         [object[]]$Files,
 
         [string]$RootPath,
@@ -546,7 +546,7 @@ function Invoke-LoraxStreamQuery {
         [string]$Command = 'parse',
 
         [Parameter(ValueFromPipeline, ValueFromPipelineByPropertyName)]
-        [Alias('FullName', 'Path')]
+        [Alias('FullName', 'Path', 'FilePath')]
         [string]$File,
 
         [string]$Query,

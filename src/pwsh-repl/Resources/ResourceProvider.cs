@@ -511,7 +511,7 @@ mcp__pwsh-repl__pwsh(
 ```python
 # 1. Launch non-blocking
 mcp__pwsh-repl__pwsh(
-    script='Invoke-BackgroundProcess -Command python -Arguments @(\"-m\", \"app.server\")'
+    script='Invoke-BackgroundProcess -Command python -Arguments @(""-m"", ""app.server"")'
 )
 
 # 2. Check status

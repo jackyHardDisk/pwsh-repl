@@ -20,6 +20,12 @@
         <PackageReference Include="System.Threading.Channels" Version="8.0.0"/>
     </ItemGroup>
 
+    <Target Name="GenerateToolDescriptions" BeforeTargets="BeforeCompile">
+        <Exec Command="pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\Generate-ToolDescriptions.ps1"
+              WorkingDirectory="$(MSBuildProjectDirectory)"
+              IgnoreExitCode="false"/>
+    </Target>
+
     <Target Name="CopyPowerShellModules" AfterTargets="Build">
         <ItemGroup>
             <PowerShellModules Include="$(OutDir)runtimes\win\lib\net8.0\**\*.*"/>
@@ -44,6 +50,24 @@
         </ItemGroup>
         <Copy SourceFiles="@(AgentBricksFiles)"
               DestinationFolder="$(OutDir)Modules\AgentBricks\%(RecursiveDir)"
+              SkipUnchangedFiles="true"/>
+    </Target>
+
+    <Target Name="CopyLoraxModModule" AfterTargets="Build">
+        <ItemGroup>
+            <LoraxModFiles Include="src\pwsh-repl\Modules\LoraxMod\**\*.*"/>
+        </ItemGroup>
+        <Copy SourceFiles="@(LoraxModFiles)"
+              DestinationFolder="$(OutDir)Modules\LoraxMod\%(RecursiveDir)"
+              SkipUnchangedFiles="true"/>
+    </Target>
+
+    <Target Name="CopyTokenCounterModule" AfterTargets="Build">
+        <ItemGroup>
+            <TokenCounterFiles Include="src\pwsh-repl\Modules\TokenCounter\**\*.*"/>
+        </ItemGroup>
+        <Copy SourceFiles="@(TokenCounterFiles)"
+              DestinationFolder="$(OutDir)Modules\TokenCounter\%(RecursiveDir)"
               SkipUnchangedFiles="true"/>
     </Target>
 
