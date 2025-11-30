@@ -51,7 +51,7 @@ Code with auto-loading AgentBricks module.
 - Base module functions: 0 tokens upfront (discovered on-demand)
 - AgentBricks functions: 0 tokens upfront (discovered on-demand)
 - LoraxMod functions: 0 tokens upfront (discovered on-demand)
-- Invoke-DevRun summaries: 99% reduction vs raw output
+- Invoke-DevRun: Summarized output vs verbose raw streams
 
 ## Quick Start
 
@@ -240,7 +240,7 @@ mcp__pwsh-repl__pwsh(script='Get-StreamData test Error | Select-RegexMatch -Patt
 - Module functions NOT in MCP tool schemas
 - Agents discover via `Get-Command -Module AgentBricks`
 - Full help via `Get-Help <function> -Full`
-- 90% token reduction vs exposing 20+ tools
+- Functions hidden in modules, not exposed as individual MCP tools
 
 **Hybrid v1+v2+v3 Pattern:**
 
