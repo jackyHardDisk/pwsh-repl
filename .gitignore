@@ -27,11 +27,26 @@ build.log
 
 # Local settings
 .claude/settings.local.json
+.mcp.json
+
+# Personal task management
+.gary/
+
+# Development data and test artifacts
+data/
+test/
 
 # Temporary files
 *.tmp
 *.temp
 ~$*
+*.bak
+
+# Development scripts (not part of distribution)
+fix_*.ps1
+fix_*.py
+UPDATE_SUMMARY.md
+stdin_commands.txt
 
 # OS files
 .DS_Store

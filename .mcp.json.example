@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "pwsh-repl": {
+      "type": "stdio",
+      "command": "C:\\path\\to\\pwsh-repl\\bin\\Debug\\net8.0-windows\\win-x64\\PowerShellMcpServer.exe",
+      "args": [],
+      "env": {
+        "PWSH_MCP_TIMEOUT_DEFAULT": "60",
+        "PWSH_MCP_MODULES": "C:\\path\\to\\SessionLog.psd1;C:\\path\\to\\other\\Module.psd1"
+      }
+    }
+  }
+}

@@ -3,7 +3,7 @@
 Model Context Protocol (MCP) server providing persistent PowerShell execution for Claude
 Code with auto-loading AgentBricks module.
 
-**Status:** Implementation Complete | Testing In Progress
+**Status:** Production Ready
 
 ## Features
 
@@ -21,10 +21,21 @@ Code with auto-loading AgentBricks module.
 
 **AgentBricks Module**
 
-- 20 PowerShell functions (Transform, Extract, Analyze, Present, Meta-Learning, State)
-- 40+ pre-configured patterns for common tools (JavaScript, Python, .NET, Build)
+- 5 PowerShell functions for pattern learning and meta-discovery
+- 43 pre-configured patterns for common tools (JavaScript, Python, .NET, Build)
 - Auto-loads on session creation
 - Token-efficient (0 tokens upfront, discovered via Get-Help)
+
+**SessionLog Module**
+
+- Session tracking with JSONL format and 4AM day boundary
+- Todo management (Add-Todo, Update-TodoStatus)
+- Session history (Show-Session, Read-SessionLog)
+
+**TokenCounter Module**
+
+- Accurate Claude token counting using tiktoken
+- Measure-Tokens function for text/file analysis
 
 **LoraxMod Module**
 
@@ -54,19 +65,21 @@ Output: `bin/Debug/net8.0-windows/win-x64/PowerShellMcpServer.exe`
 
 ### Configure
 
-Add to `.mcp.json` (project-level) or `~/.claude/settings.json` (user-level):
+Copy `.mcp.json.example` to `.mcp.json` and update paths, or add to `~/.claude/settings.json`:
 
 ```json
 {
   "mcpServers": {
     "pwsh-repl": {
-      "command": "C:\\Users\\yourname\\source\\repos\\pwsh-repl\\bin\\Debug\\net8.0-windows\\win-x64\\PowerShellMcpServer.exe"
+      "type": "stdio",
+      "command": "C:\\path\\to\\PowerShellMcpServer.exe",
+      "env": {
+        "PWSH_MCP_TIMEOUT_DEFAULT": "60"
+      }
     }
   }
 }
 ```
-
-Adjust path to your build output directory.
 
 ### Test
 
@@ -158,15 +171,11 @@ Get-Patterns          # List learned regex patterns
 Get-Help <function>   # Full documentation for any function
 ```
 
-**Function categories:**
+**Functions:**
 
-- Transform: Format-Count, Group-By, Measure-Frequency
-- Extract: Extract-Regex, Extract-Between, Extract-Column
-- Analyze: Find-Errors, Find-Warnings, Parse-BuildOutput
-- Present: Show, Export-ToFile
-- Meta-Discovery: Find-ProjectTools
-- Meta-Learning: Set-Pattern, Get-Patterns, Test-Pattern, Learn-OutputPattern
-- State: Save-Project, Load-Project, Get-BrickStore, Clear-Stored
+- Get-Patterns, Set-Pattern, Test-Pattern - Pattern management
+- Register-OutputPattern - Learn patterns from tool output
+- Find-ProjectTools - Discover available build/test/lint tools
 
 **Pre-configured patterns:** ESLint, TypeScript, Pytest, Mypy, MSBuild, NuGet, GCC,
 Clang, CMake, and 30+ more.
@@ -195,18 +204,9 @@ mcp__pwsh-repl__pwsh(script='Get-StreamData test Error | Select-RegexMatch -Patt
 
 ## Documentation
 
-**Technical Details:**
-
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Implementation details, build process,
-  session management
-- [AGENTBRICKS.md](docs/AGENTBRICKS.md) - Complete AgentBricks function reference with
-  examples
-- [DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md) - Why key architectural choices were
-  made
-
-**Roadmap:**
-
-- [TODO.md](docs/TODO.md) - Prioritized next steps and future enhancements
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Implementation details, build process, session management
+- [AGENTBRICKS.md](docs/AGENTBRICKS.md) - Complete AgentBricks function reference with examples
+- [DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md) - Why key architectural choices were made
 
 ## Current Status
 
@@ -214,36 +214,12 @@ mcp__pwsh-repl__pwsh(script='Get-StreamData test Error | Select-RegexMatch -Patt
 
 - Core MCP server with stdio protocol
 - 3 tools: pwsh (with mode callback), stdin, list_sessions
-- SessionManager with named sessions
-- PowerShellPool with channel-based pattern
+- SessionManager with named sessions and stdin pipe architecture
 - Base module (39 functions), AgentBricks (5 functions + 43 patterns)
-- Auto-loading modules on session creation (Base, AgentBricks, LoraxMod, TokenCounter)
-- Build targets for module copying
-
-**Testing In Progress:**
-
-- Manual testing with real projects
-- Integration test suite
-- User acceptance scenarios
-- Common PowerShell command validation
-- AgentBricks function validation
-
-## Next Steps
-
-**Immediate priorities** (from [docs/TODO.md](docs/TODO.md)):
-
-1. **JEA Integration** - Just Enough Administration for security constraints
-2. **Test Common PowerShell Commands** - Validation suite for pwsh tool
-3. **Test AgentBricks Module** - All 20 functions with real inputs
-4. **Import/Export Environment Workflows** - Conda/venv integration patterns
-5. **Integration Test Suite** - End-to-end scenarios
-6. **User Acceptance Scenarios** - Real-world workflows
-
-**Longer-term goals:**
-
-- Wrapper servers (token optimization for downstream MCP servers)
-- Filter servers (schema filtering, demonstrated in mcp-filter project)
-- Multi-project MCP server collection
+- LoraxMod (tree-sitter AST parsing), SessionLog, TokenCounter modules
+- Auto-loading modules on session creation
+- Build-time Quick Reference generation in tool description
+- Environment activation (conda/venv) support
 
 ## Architecture Highlights
 
@@ -343,17 +319,16 @@ pwsh("Save-Project -Path '.brickyard.json'")
 ## Building from Source
 
 ```bash
-git clone <repository-url>
-cd pwsh-repl
+git clone https://github.com/jacksonhunter/PowerShell-REPL-MCP-Server.git
+cd PowerShell-REPL-MCP-Server
 dotnet restore
 dotnet build
 ```
 
-Build output includes:
-
+Build output: `bin/Debug/net8.0-windows/win-x64/`
 - PowerShellMcpServer.exe
 - PowerShell SDK runtime libraries (auto-copied)
-- AgentBricks module (auto-copied to Modules/)
+- All modules (Base, AgentBricks, LoraxMod, TokenCounter) auto-copied to Modules/
 
 ## Contributing
 
