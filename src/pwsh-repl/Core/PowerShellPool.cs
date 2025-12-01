@@ -1,7 +1,10 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO.Pipes;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading.Channels;
 
 namespace PowerShellMcpServer.pwsh_repl.Core;
@@ -145,8 +148,28 @@ public class PowerShellSession : IDisposable
     public Runspace Runspace { get; }
     public AnonymousPipeServerStream? StdinPipe { get; set; }
 
+    /// <summary>
+    ///     Background processes managed by this session.
+    ///     Key is process name, value is process info with stdout/stderr buffers.
+    /// </summary>
+    public ConcurrentDictionary<string, BackgroundProcessInfo> BackgroundProcesses { get; } = new();
+
     public void Dispose()
     {
+        // Dispose background processes first (kill and cleanup)
+        foreach (var kvp in BackgroundProcesses)
+        {
+            try
+            {
+                kvp.Value.Dispose();
+            }
+            catch
+            {
+                // Suppress disposal errors
+            }
+        }
+        BackgroundProcesses.Clear();
+
         // Dispose in order: StdinPipe, Runspace, PowerShell
         try
         {
@@ -178,6 +201,127 @@ public class PowerShellSession : IDisposable
         }
     }
 }
+
+/// <summary>
+///     Information about a background process managed by C# SessionManager.
+///     Captures stdout/stderr via async event handlers for incremental reading.
+/// </summary>
+public class BackgroundProcessInfo : IDisposable
+{
+    private readonly object _stdoutLock = new();
+    private readonly object _stderrLock = new();
+    private bool _disposed;
+
+    public Process? Process { get; set; }
+    public StringBuilder StdoutBuffer { get; } = new();
+    public StringBuilder StderrBuffer { get; } = new();
+    public int LastStdoutPosition { get; set; }
+    public int LastStderrPosition { get; set; }
+    public DateTime StartTime { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string FilePath { get; set; } = string.Empty;
+    public string Arguments { get; set; } = string.Empty;
+    public string? WorkingDirectory { get; set; }
+    public bool StdinClosed { get; set; }
+
+    /// <summary>
+    ///     Append to stdout buffer (thread-safe, called from async event handler).
+    /// </summary>
+    public void AppendStdout(string? data)
+    {
+        if (data == null) return;
+        lock (_stdoutLock)
+        {
+            StdoutBuffer.AppendLine(data);
+        }
+    }
+
+    /// <summary>
+    ///     Append to stderr buffer (thread-safe, called from async event handler).
+    /// </summary>
+    public void AppendStderr(string? data)
+    {
+        if (data == null) return;
+        lock (_stderrLock)
+        {
+            StderrBuffer.AppendLine(data);
+        }
+    }
+
+    /// <summary>
+    ///     Read stdout since last read (incremental) or all stdout.
+    /// </summary>
+    public string ReadStdout(bool incremental = true)
+    {
+        lock (_stdoutLock)
+        {
+            var content = StdoutBuffer.ToString();
+            if (incremental)
+            {
+                var newContent = content.Substring(LastStdoutPosition);
+                LastStdoutPosition = content.Length;
+                return newContent;
+            }
+            return content;
+        }
+    }
+
+    /// <summary>
+    ///     Read stderr since last read (incremental) or all stderr.
+    /// </summary>
+    public string ReadStderr(bool incremental = true)
+    {
+        lock (_stderrLock)
+        {
+            var content = StderrBuffer.ToString();
+            if (incremental)
+            {
+                var newContent = content.Substring(LastStderrPosition);
+                LastStderrPosition = content.Length;
+                return newContent;
+            }
+            return content;
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        try
+        {
+            if (Process != null && !Process.HasExited)
+            {
+                Process.Kill();
+            }
+        }
+        catch
+        {
+            // Suppress kill errors
+        }
+
+        try
+        {
+            Process?.Dispose();
+        }
+        catch
+        {
+            // Suppress disposal errors
+        }
+    }
+}
+
+/// <summary>
+///     Status information for a background process.
+/// </summary>
+public record BackgroundProcessStatus(
+    string Name,
+    bool IsRunning,
+    int? ExitCode,
+    TimeSpan Runtime,
+    string FilePath,
+    string Arguments);
 
 internal static class NativeMethods
 {

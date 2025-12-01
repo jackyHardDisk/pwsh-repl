@@ -54,7 +54,10 @@ public class PwshTool
         int timeoutSeconds = 60,
         [Description(
             "Run script in background and return immediately. Use PwshOutput tool to monitor progress. Incompatible with mode parameter.")]
-        bool runInBackground = false)
+        bool runInBackground = false,
+        [Description(
+            "Auto-dispose session after execution. true=immediate, number=seconds TTL. Default: immediate for 'default' session, 600s (10min) for named sessions.")]
+        object? autodispose = null)
     {
         var session =
             _sessionManager.GetOrCreateSession(sessionId, environment,
@@ -70,7 +73,7 @@ public class PwshTool
             if (!string.IsNullOrWhiteSpace(mode) && runInBackground)
                 return "Error: 'mode' and 'run_in_background' are incompatible. Mode callbacks require synchronous execution. Use run_in_background with raw script only.";
 
-            // Background process execution
+            // Background process execution via C# SessionManager
             if (runInBackground)
             {
                 // Auto-generate name if not provided
@@ -80,22 +83,37 @@ public class PwshTool
                     name = $"bg_{bgNum}";
                 }
 
-                // Use here-strings for safe script escaping
-                var bgScript = $@"Invoke-BackgroundProcess -Name '{name}' -Script @'
-{script}
-'@";
+                // Start background process using SessionManager (C# managed)
+                // For PowerShell scripts, use pwsh -NoProfile -Command
+                var processInfo = _sessionManager.StartBackgroundProcess(
+                    sessionId,
+                    name,
+                    "pwsh",
+                    new[] { "-NoProfile", "-Command", script! },
+                    Environment.CurrentDirectory);
 
-                // Start background process
-                session.PowerShell.AddScript(bgScript);
-                var bgResult = session.PowerShell.Invoke();
-                session.PowerShell.Commands.Clear();
-                session.PowerShell.Streams.ClearStreams();
+                // Brief delay to let process start and produce initial output
+                System.Threading.Thread.Sleep(200);
 
-                // Get initial output after brief delay
-                System.Threading.Thread.Sleep(100);
-                var initialOutput = GetInitialOutput(session, name);
+                // Get initial output from SessionManager
+                var (stdout, stderr) = _sessionManager.ReadBackgroundOutput(sessionId, name, incremental: true);
+                var initialOutput = new StringBuilder();
 
-                return $"Background process '{name}' started\n\n{initialOutput}";
+                if (!string.IsNullOrWhiteSpace(stdout))
+                {
+                    initialOutput.AppendLine("=== stdout ===");
+                    initialOutput.Append(stdout);
+                }
+                if (!string.IsNullOrWhiteSpace(stderr))
+                {
+                    initialOutput.AppendLine("=== stderr ===");
+                    initialOutput.Append(stderr);
+                }
+
+                var status = _sessionManager.GetBackgroundProcessStatus(sessionId, name);
+                var statusText = status.IsRunning ? "running" : $"stopped (exit: {status.ExitCode})";
+
+                return $"Background process '{name}' started (PID {processInfo.Process?.Id}, {statusText})\n\n{(initialOutput.Length > 0 ? initialOutput.ToString() : "(No output yet)")}";
             }
 
             // Build PowerShell script based on mode
@@ -142,7 +160,7 @@ public class PwshTool
 
             // Execute with timeout using async pattern
             // ExecuteScript handles stdin swapping and command cleanup
-            var invokeTask = Task.Run(() => _sessionManager.ExecuteScript(session, executionScript));
+            var invokeTask = Task.Run(() => _sessionManager.ExecuteScript(session, executionScript, sessionId));
             var timeout = TimeSpan.FromSeconds(timeoutSeconds);
 
             if (invokeTask.Wait(timeout))
@@ -190,6 +208,62 @@ if (-not $global:DevRunCache.ContainsKey('{name}')) {{
         finally
         {
             session.PowerShell.Streams.ClearStreams();
+
+            // Handle autodispose based on parameter value and session type
+            HandleAutodispose(sessionId, autodispose);
+        }
+    }
+
+    /// <summary>
+    ///     Handle session autodispose logic.
+    ///     - true or "default" session: dispose immediately
+    ///     - int/number: set TTL in seconds
+    ///     - null + named session: set 600s TTL (10 minutes)
+    /// </summary>
+    private void HandleAutodispose(string sessionId, object? autodispose)
+    {
+        // Extract value from JsonElement if needed
+        bool? disposeNow = null;
+        int? ttlSeconds = null;
+
+        if (autodispose is JsonElement jsonElement)
+        {
+            if (jsonElement.ValueKind == JsonValueKind.True)
+                disposeNow = true;
+            else if (jsonElement.ValueKind == JsonValueKind.False)
+                disposeNow = false;
+            else if (jsonElement.ValueKind == JsonValueKind.Number)
+                ttlSeconds = jsonElement.GetInt32();
+        }
+        else if (autodispose is bool b)
+        {
+            disposeNow = b;
+        }
+        else if (autodispose is int i)
+        {
+            ttlSeconds = i;
+        }
+        else if (autodispose is long l)
+        {
+            ttlSeconds = (int)l;
+        }
+
+        // Determine action
+        if (disposeNow == true || (autodispose == null && sessionId == "default"))
+        {
+            // Immediate disposal for explicit true or default session
+            _sessionManager.RemoveSession(sessionId);
+        }
+        else if (disposeNow == false)
+        {
+            // Explicit false: no autodispose, session persists indefinitely
+            // Do nothing
+        }
+        else
+        {
+            // Set TTL: explicit seconds or default 600s for named sessions
+            var seconds = ttlSeconds ?? 600;
+            _sessionManager.SetSessionTTL(sessionId, seconds);
         }
     }
 
@@ -359,42 +433,4 @@ if (-not $global:DevRunCache.ContainsKey('{name}')) {{
         }
     }
 
-    /// <summary>
-    ///     Get initial output from background process temp files.
-    ///     Reads first 10 lines from stdout after brief startup delay.
-    /// </summary>
-    private string GetInitialOutput(PowerShellSession session, string name, int maxLines = 10)
-    {
-        try
-        {
-            // Query background job info to get temp file path
-            var getInfoScript = $"$global:BrickBackgroundJobs['{name}'].OutFile";
-            session.PowerShell.AddScript(getInfoScript);
-            var infoResult = session.PowerShell.Invoke();
-            session.PowerShell.Commands.Clear();
-            session.PowerShell.Streams.ClearStreams();
-
-            var outFile = infoResult.FirstOrDefault()?.ToString();
-            if (string.IsNullOrWhiteSpace(outFile) || !File.Exists(outFile))
-                return "(No output yet)";
-
-            // Read first few lines from temp file using shared access
-            // FileShare.ReadWrite allows reading while PowerShell is still writing
-            using var stream = new FileStream(outFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            using var reader = new StreamReader(stream);
-
-            var lines = new List<string>();
-            while (lines.Count < maxLines && reader.ReadLine() is { } line)
-                lines.Add(line);
-
-            if (lines.Count == 0)
-                return "(No output yet)";
-
-            return string.Join("\n", lines);
-        }
-        catch (Exception ex)
-        {
-            return $"(Error reading initial output: {ex.Message})";
-        }
-    }
 }

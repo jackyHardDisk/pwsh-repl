@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO.Pipes;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
@@ -14,12 +15,58 @@ namespace PowerShellMcpServer.pwsh_repl.Core;
 public class SessionManager : IDisposable
 {
     private readonly ConcurrentDictionary<string, PowerShellSession> _sessions = new();
+    private readonly ConcurrentDictionary<string, DateTime> _sessionExpiry = new();
     private readonly object _stdinHandleLock = new();
+    private readonly object _auditLogLock = new();
+    private readonly string? _auditLogPath;
+    private Timer? _cleanupTimer;
     private bool _disposed;
 
     public SessionManager()
     {
         Console.Error.WriteLine("SessionManager: Per-session stdin pipes enabled");
+
+        // Check for audit logging (opt-in via environment variable)
+        _auditLogPath = Environment.GetEnvironmentVariable("PWSH_MCP_AUDIT_LOG");
+        if (!string.IsNullOrEmpty(_auditLogPath))
+        {
+            Console.Error.WriteLine($"SessionManager: Audit logging enabled to '{_auditLogPath}'");
+            try
+            {
+                // Ensure directory exists
+                var dir = Path.GetDirectoryName(_auditLogPath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+
+                // Write startup marker
+                WriteAuditLog("SESSION_MANAGER_START", "default", "Audit logging initialized");
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"SessionManager: Failed to initialize audit log: {ex.Message}");
+                _auditLogPath = null; // Disable if can't write
+            }
+        }
+    }
+
+    private void WriteAuditLog(string eventType, string sessionId, string content)
+    {
+        if (string.IsNullOrEmpty(_auditLogPath)) return;
+
+        try
+        {
+            lock (_auditLogLock)
+            {
+                var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                var sanitizedContent = content.Replace("\r", "\\r").Replace("\n", "\\n");
+                var logLine = $"[{timestamp}] {eventType} session={sessionId} content=\"{sanitizedContent}\"\n";
+                File.AppendAllText(_auditLogPath, logLine);
+            }
+        }
+        catch
+        {
+            // Silently fail - don't break execution for logging failures
+        }
     }
 
     public void Dispose()
@@ -115,12 +162,12 @@ public class SessionManager : IDisposable
             // Activate environment if specified (BEFORE modules)
             if (!string.IsNullOrEmpty(environment)) ActivateEnvironment(pwsh, environment);
 
-            // Pre-load Base module (foundation for all core functions)
-            LoadModule(pwsh, "Base",
-                Path.Combine(AppContext.BaseDirectory, "Modules", "Base"));
+            // Pre-load AgentBlocks module (foundation for all core functions)
+            LoadModule(pwsh, "AgentBlocks",
+                Path.Combine(AppContext.BaseDirectory, "Modules", "AgentBlocks"));
 
             // Load additional modules from PWSH_MCP_MODULES environment variable
-            // (includes AgentBricks, LoraxMod, SessionLog, TokenCounter, etc.)
+            // (includes LoraxMod, SessionLog, TokenCounter, etc.)
             LoadAdditionalModules(pwsh);
 
             // Initialize ConcurrentDictionary for DevRun cache (in C# for thread-safety)
@@ -229,7 +276,7 @@ if (-not $global:DevRunCacheCounter) {
 
 
     private void LoadModule(PowerShell pwsh, string moduleName, string modulePath,
-        bool validateAgentBricks = false)
+        bool validateAgentBlocks = false)
     {
         try
         {
@@ -241,8 +288,8 @@ if (-not $global:DevRunCacheCounter) {
                 pwsh.Commands.Clear();
                 pwsh.Streams.ClearStreams();
 
-                // Validate AgentBricks loaded (only for AgentBricks)
-                if (validateAgentBricks && moduleName == "AgentBricks")
+                // Validate AgentBlocks loaded (only for AgentBlocks)
+                if (validateAgentBlocks && moduleName == "AgentBlocks")
                 {
                     pwsh.AddScript("$global:BrickStore.Patterns.Count");
                     var testResult = pwsh.Invoke();
@@ -253,7 +300,7 @@ if (-not $global:DevRunCacheCounter) {
                         testResult[0].ToString() == "0")
                     {
                         Console.Error.WriteLine(
-                            "WARNING: AgentBricks module loaded but appears non-functional (no patterns loaded)");
+                            "WARNING: AgentBlocks module loaded but appears non-functional (no patterns loaded)");
                     }
                     else
                     {
@@ -334,12 +381,12 @@ if (-not $global:DevRunCacheCounter) {
             }
         }
 
-        // 3. Filter out AgentBricks (loaded separately with validation)
-        var agentBricksPath = Path.GetFullPath(
-            Path.Combine(AppContext.BaseDirectory, "Modules", "AgentBricks", "AgentBricks.psd1"));
-        if (modulePaths.Remove(agentBricksPath))
+        // 3. Filter out AgentBlocks (loaded separately with validation)
+        var AgentBlocksPath = Path.GetFullPath(
+            Path.Combine(AppContext.BaseDirectory, "Modules", "AgentBlocks", "AgentBlocks.psd1"));
+        if (modulePaths.Remove(AgentBlocksPath))
         {
-            Console.Error.WriteLine($"SessionManager: Removed AgentBricks from additional modules (loaded separately)");
+            Console.Error.WriteLine($"SessionManager: Removed AgentBlocks from additional modules (loaded separately)");
         }
 
         var result = modulePaths.ToArray();
@@ -423,12 +470,15 @@ if (-not $global:DevRunCacheCounter) {
     ///     Execute a script in a session with stdin handle swapping.
     ///     This method is thread-safe and ensures the correct stdin handle is active during execution.
     /// </summary>
-    public Collection<PSObject> ExecuteScript(PowerShellSession session, string script)
+    public Collection<PSObject> ExecuteScript(PowerShellSession session, string script, string? sessionId = null)
     {
         if (session == null)
             throw new ArgumentNullException(nameof(session));
         if (script == null)
             throw new ArgumentNullException(nameof(script));
+
+        // Audit log the execution attempt
+        WriteAuditLog("EXECUTE", sessionId ?? "unknown", script);
 
         lock (_stdinHandleLock)
         {
@@ -634,6 +684,345 @@ if (-not $global:DevRunCacheCounter) {
         }
         return count;
     }
+
+    /// <summary>
+    ///     Set TTL for a session. Session will be removed after specified seconds.
+    ///     Calling again resets the TTL (extends lifetime).
+    /// </summary>
+    public void SetSessionTTL(string sessionId, int seconds)
+    {
+        if (_disposed) return;
+
+        var expiry = DateTime.UtcNow.AddSeconds(seconds);
+        _sessionExpiry[sessionId] = expiry;
+
+        // Ensure cleanup timer is running
+        EnsureCleanupTimerRunning();
+
+        Console.Error.WriteLine($"SessionManager: Session '{sessionId}' TTL set to {seconds}s (expires {expiry:HH:mm:ss})");
+    }
+
+    /// <summary>
+    ///     Start the cleanup timer if not already running.
+    /// </summary>
+    private void EnsureCleanupTimerRunning()
+    {
+        if (_cleanupTimer != null) return;
+
+        // Check every 30 seconds for expired sessions
+        _cleanupTimer = new Timer(_ => CleanupExpiredSessions(), null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+        Console.Error.WriteLine("SessionManager: Cleanup timer started (30s interval)");
+    }
+
+    /// <summary>
+    ///     Remove sessions that have exceeded their TTL.
+    /// </summary>
+    private void CleanupExpiredSessions()
+    {
+        if (_disposed) return;
+
+        var now = DateTime.UtcNow;
+        var expiredCount = 0;
+
+        foreach (var kvp in _sessionExpiry)
+        {
+            if (kvp.Value < now)
+            {
+                if (_sessionExpiry.TryRemove(kvp.Key, out _))
+                {
+                    RemoveSession(kvp.Key);
+                    expiredCount++;
+                    Console.Error.WriteLine($"SessionManager: Session '{kvp.Key}' expired and removed");
+                }
+            }
+        }
+
+        // Stop timer if no more sessions to track
+        if (_sessionExpiry.IsEmpty && _cleanupTimer != null)
+        {
+            _cleanupTimer.Dispose();
+            _cleanupTimer = null;
+            Console.Error.WriteLine("SessionManager: Cleanup timer stopped (no sessions to track)");
+        }
+    }
+
+    #region Background Process Management
+
+    /// <summary>
+    ///     Start a background process in a session.
+    /// </summary>
+    public BackgroundProcessInfo StartBackgroundProcess(
+        string sessionId,
+        string name,
+        string filePath,
+        string[]? args = null,
+        string? workingDir = null)
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(SessionManager));
+
+        var session = GetOrCreateSession(sessionId);
+
+        if (session.BackgroundProcesses.ContainsKey(name))
+            throw new InvalidOperationException($"Background process '{name}' already exists in session '{sessionId}'");
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = filePath,
+            Arguments = args != null ? string.Join(" ", args) : string.Empty,
+            WorkingDirectory = workingDir ?? Environment.CurrentDirectory,
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+
+        var processInfo = new BackgroundProcessInfo
+        {
+            Name = name,
+            FilePath = filePath,
+            Arguments = psi.Arguments,
+            WorkingDirectory = psi.WorkingDirectory,
+            StartTime = DateTime.Now
+        };
+
+        var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
+
+        // Wire up async output handlers
+        process.OutputDataReceived += (sender, e) => processInfo.AppendStdout(e.Data);
+        process.ErrorDataReceived += (sender, e) => processInfo.AppendStderr(e.Data);
+
+        try
+        {
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            processInfo.Process = process;
+            session.BackgroundProcesses[name] = processInfo;
+
+            Console.Error.WriteLine(
+                $"SessionManager: Started background process '{name}' (PID {process.Id}) in session '{sessionId}'");
+
+            return processInfo;
+        }
+        catch (Exception ex)
+        {
+            process.Dispose();
+            throw new InvalidOperationException($"Failed to start background process '{name}': {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    ///     Write data to a background process's stdin.
+    /// </summary>
+    public void WriteToBackgroundProcess(string sessionId, string name, string data)
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(SessionManager));
+
+        var processInfo = GetBackgroundProcessInfo(sessionId, name);
+
+        if (processInfo.StdinClosed)
+            throw new InvalidOperationException($"Stdin for background process '{name}' has been closed");
+
+        if (processInfo.Process == null || processInfo.Process.HasExited)
+            throw new InvalidOperationException($"Background process '{name}' is not running");
+
+        try
+        {
+            processInfo.Process.StandardInput.Write(data);
+            processInfo.Process.StandardInput.Flush();
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to write to background process '{name}': {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    ///     Close stdin for a background process to signal EOF.
+    /// </summary>
+    public void CloseBackgroundProcessStdin(string sessionId, string name)
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(SessionManager));
+
+        var processInfo = GetBackgroundProcessInfo(sessionId, name);
+
+        if (processInfo.StdinClosed)
+            return; // Already closed
+
+        try
+        {
+            processInfo.Process?.StandardInput.Close();
+            processInfo.StdinClosed = true;
+            Console.Error.WriteLine($"SessionManager: Closed stdin for background process '{name}'");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"SessionManager: Error closing stdin for '{name}': {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    ///     Read stdout/stderr from a background process.
+    /// </summary>
+    public (string stdout, string stderr) ReadBackgroundOutput(string sessionId, string name, bool incremental = true)
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(SessionManager));
+
+        var processInfo = GetBackgroundProcessInfo(sessionId, name);
+
+        var stdout = processInfo.ReadStdout(incremental);
+        var stderr = processInfo.ReadStderr(incremental);
+
+        return (stdout, stderr);
+    }
+
+    /// <summary>
+    ///     Get status of a background process.
+    /// </summary>
+    public BackgroundProcessStatus GetBackgroundProcessStatus(string sessionId, string name)
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(SessionManager));
+
+        var processInfo = GetBackgroundProcessInfo(sessionId, name);
+        var process = processInfo.Process;
+
+        var isRunning = process != null && !process.HasExited;
+        int? exitCode = null;
+
+        if (process != null && process.HasExited)
+        {
+            try
+            {
+                exitCode = process.ExitCode;
+            }
+            catch
+            {
+                // May fail if process disposed
+            }
+        }
+
+        var runtime = DateTime.Now - processInfo.StartTime;
+
+        return new BackgroundProcessStatus(
+            name,
+            isRunning,
+            exitCode,
+            runtime,
+            processInfo.FilePath,
+            processInfo.Arguments);
+    }
+
+    /// <summary>
+    ///     Stop a background process and optionally populate DevRun cache.
+    /// </summary>
+    public void StopBackgroundProcess(string sessionId, string name, bool populateCache = true)
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(SessionManager));
+
+        if (!_sessions.TryGetValue(sessionId, out var session))
+            throw new InvalidOperationException($"Session '{sessionId}' does not exist");
+
+        if (!session.BackgroundProcesses.TryRemove(name, out var processInfo))
+            throw new InvalidOperationException($"Background process '{name}' not found in session '{sessionId}'");
+
+        // Get all output before disposing
+        var stdout = processInfo.ReadStdout(incremental: false);
+        var stderr = processInfo.ReadStderr(incremental: false);
+
+        // Dispose (kills process if still running)
+        processInfo.Dispose();
+
+        Console.Error.WriteLine($"SessionManager: Stopped background process '{name}' in session '{sessionId}'");
+
+        // Populate DevRun cache if requested (for Get-StreamData compatibility)
+        if (populateCache)
+        {
+            PopulateDevRunCache(session, name, stdout, stderr, processInfo.FilePath, processInfo.Arguments);
+        }
+    }
+
+    /// <summary>
+    ///     Populate DevRun cache with background process output for Get-StreamData compatibility.
+    /// </summary>
+    private void PopulateDevRunCache(PowerShellSession session, string name, string stdout, string stderr, string filePath, string arguments)
+    {
+        try
+        {
+            // Set environment variables that Get-StreamData expects
+            var script = $@"
+$env:{name}_stdout = @'
+{stdout}
+'@
+$env:{name}_stderr = @'
+{stderr}
+'@
+$streams = @{{
+    Error = @({(string.IsNullOrEmpty(stderr) ? "" : "$env:" + name + "_stderr -split \"`n\"")})
+    Warning = @()
+    Output = @({(string.IsNullOrEmpty(stdout) ? "" : "$env:" + name + "_stdout -split \"`n\"")})
+    Verbose = @()
+    Debug = @()
+    Information = @()
+}}
+$env:{name}_streams = $streams | ConvertTo-Json -Compress
+$env:{name} = '{filePath} {arguments}'
+# Invalidate cache to force reload
+if ($global:DevRunCache -and $global:DevRunCache.ContainsKey('{name}')) {{
+    $null = $global:DevRunCache.TryRemove('{name}', [ref]$null)
+}}
+";
+            session.PowerShell.AddScript(script);
+            session.PowerShell.Invoke();
+            session.PowerShell.Commands.Clear();
+            session.PowerShell.Streams.ClearStreams();
+
+            Console.Error.WriteLine($"SessionManager: Populated DevRun cache for '{name}'");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"SessionManager: Failed to populate DevRun cache for '{name}': {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    ///     Get background process info, throwing if not found.
+    /// </summary>
+    private BackgroundProcessInfo GetBackgroundProcessInfo(string sessionId, string name)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session))
+            throw new InvalidOperationException($"Session '{sessionId}' does not exist");
+
+        if (!session.BackgroundProcesses.TryGetValue(name, out var processInfo))
+            throw new InvalidOperationException($"Background process '{name}' not found in session '{sessionId}'");
+
+        return processInfo;
+    }
+
+    /// <summary>
+    ///     List all background processes in a session.
+    /// </summary>
+    public IEnumerable<BackgroundProcessStatus> ListBackgroundProcesses(string sessionId)
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(SessionManager));
+
+        if (!_sessions.TryGetValue(sessionId, out var session))
+            return Enumerable.Empty<BackgroundProcessStatus>();
+
+        return session.BackgroundProcesses.Keys
+            .Select(name => GetBackgroundProcessStatus(sessionId, name))
+            .ToList();
+    }
+
+    #endregion
 }
 
 /// <summary>
