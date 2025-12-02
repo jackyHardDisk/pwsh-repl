@@ -84,12 +84,14 @@ public class PwshTool
                 }
 
                 // Start background process using SessionManager (C# managed)
-                // For PowerShell scripts, use pwsh -NoProfile -Command
+                // Use -EncodedCommand to avoid argument parsing issues with spaces/quotes
+                var scriptBytes = Encoding.Unicode.GetBytes(script!);
+                var encodedScript = Convert.ToBase64String(scriptBytes);
                 var processInfo = _sessionManager.StartBackgroundProcess(
                     sessionId,
                     name,
                     "pwsh",
-                    new[] { "-NoProfile", "-Command", script! },
+                    new[] { "-NoProfile", "-EncodedCommand", encodedScript },
                     Environment.CurrentDirectory);
 
                 // Brief delay to let process start and produce initial output
