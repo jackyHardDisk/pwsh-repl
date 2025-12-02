@@ -1,7 +1,7 @@
 # PowerShell Persistent MCP Server
 
 Model Context Protocol (MCP) server providing persistent PowerShell execution for Claude
-Code with auto-loading AgentBricks module.
+Code with auto-loading AgentBlocks module.
 
 **Status:** Production Ready
 
@@ -15,11 +15,11 @@ Code with auto-loading AgentBricks module.
 
 **3 MCP Tools**
 
-- `stdin` - Write to session-specific stdin pipes
+- `stdio` - Interact with background processes or session stdin
 - `pwsh` - Execute PowerShell with session persistence and mode callbacks
 - `list_sessions` - List active PowerShell session IDs
 
-**AgentBricks Module**
+**AgentBlocks Module**
 
 - 5 PowerShell functions for pattern learning and meta-discovery
 - 43 pre-configured patterns for common tools (JavaScript, Python, .NET, Build)
@@ -49,7 +49,7 @@ Code with auto-loading AgentBricks module.
 
 - Tool schemas: ~1,400 tokens (3 tools)
 - Base module functions: 0 tokens upfront (discovered on-demand)
-- AgentBricks functions: 0 tokens upfront (discovered on-demand)
+- AgentBlocks functions: 0 tokens upfront (discovered on-demand)
 - LoraxMod functions: 0 tokens upfront (discovered on-demand)
 - Invoke-DevRun: Summarized output vs verbose raw streams
 
@@ -61,7 +61,7 @@ Code with auto-loading AgentBricks module.
 dotnet build
 ```
 
-Output: `bin/Debug/net8.0-windows/win-x64/PowerShellMcpServer.exe`
+Output: `release/v0.1.0/PowerShellMcpServer.exe`
 
 ### Configure
 
@@ -84,10 +84,10 @@ Copy `.mcp.json.example` to `.mcp.json` and update paths, or add to `~/.claude/s
 ### Test
 
 ```powershell
-# Import Base module to verify setup
-Import-Module C:\Path\To\pwsh-repl\src\pwsh-repl\Modules\Base\Base.psd1
-Get-Command -Module Base | Measure-Object
-# Should show 39 functions
+# Import AgentBlocks module to verify setup
+Import-Module C:\Path\To\pwsh-repl\src\pwsh-repl\Modules\AgentBlocks\AgentBlocks.psd1
+Get-Command -Module AgentBlocks | Measure-Object
+# Should show 41 functions
 ```
 
 ## Tools Reference
@@ -125,24 +125,36 @@ pwsh("$myVar", "session2")
 pwsh("Get-Process | Where-Object { $_.CPU -gt 100 } | Select-Object -First 5", "default")
 ```
 
-### stdin - Control Child Process Input
+### stdio - Background Process & Stdin Control
 
-**Purpose:** Write data to stdin pipes for child processes or signal EOF
+**Purpose:** Interact with C#-managed background processes or session stdin pipes
 
 **Parameters:**
 
+- `name` (optional) - Background process name (interacts with that process if provided)
 - `data` (optional) - String to write to stdin
-- `close` (optional, default: false) - Close write end to signal EOF
+- `close` (optional, default: false) - Close stdin to signal EOF
+- `stop` (optional, default: false) - Stop process and cache output for Get-BackgroundData
+- `readOutput` (optional, default: true) - Read and return stdout/stderr
 - `sessionId` (optional, default: "default") - Target session
 
 **Example:**
 
 ```python
-# Write data to stdin
-mcp__pwsh-repl__stdin(data='line1\nline2\n', sessionId='repl')
+# Start background process
+mcp__pwsh-repl__pwsh(script='python server.py', runInBackground=True, name='srv', sessionId='dev')
 
-# Close stdin to signal EOF
-mcp__pwsh-repl__stdin(close=True, sessionId='repl')
+# Read output from background process
+mcp__pwsh-repl__stdio(name='srv', sessionId='dev')
+
+# Write to background process stdin
+mcp__pwsh-repl__stdio(name='srv', data='command\n', sessionId='dev')
+
+# Stop process and cache output
+mcp__pwsh-repl__stdio(name='srv', stop=True, sessionId='dev')
+
+# Legacy: Write to session stdin pipe (no name)
+mcp__pwsh-repl__stdio(data='line1\nline2\n', sessionId='repl')
 ```
 
 ### list_sessions - List Active Sessions
@@ -158,7 +170,7 @@ mcp__pwsh-repl__list_sessions()
 # Returns: ['default', 'gary_pwsh_repl', 'build_session']
 ```
 
-## AgentBricks Module
+## AgentBlocks Module
 
 **Auto-loads on session creation.** Functions available immediately without import.
 
@@ -191,7 +203,7 @@ mcp__pwsh-repl__pwsh(
     kwargs={'Streams': ['Error', 'Warning']}
 )
 
-# Analyze failures with AgentBricks
+# Analyze failures with AgentBlocks
 mcp__pwsh-repl__pwsh(script='Get-StreamData test Error | Select-RegexMatch -Pattern (Get-Patterns -Name "Pytest-Fail").Pattern | Format-Count')
 
 # Output:
@@ -200,12 +212,12 @@ mcp__pwsh-repl__pwsh(script='Get-StreamData test Error | Select-RegexMatch -Patt
 #   1x: tests/test_db.py::test_query
 ```
 
-**Full documentation:** See [docs/AGENTBRICKS.md](docs/AGENTBRICKS.md)
+**Full documentation:** See [docs/AgentBlocks.md](docs/AgentBlocks.md)
 
 ## Documentation
 
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Implementation details, build process, session management
-- [AGENTBRICKS.md](docs/AGENTBRICKS.md) - Complete AgentBricks function reference with examples
+- [AgentBlocks.md](docs/AgentBlocks.md) - Complete AgentBlocks function reference with examples
 - [DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md) - Why key architectural choices were made
 
 ## Current Status
@@ -215,7 +227,7 @@ mcp__pwsh-repl__pwsh(script='Get-StreamData test Error | Select-RegexMatch -Patt
 - Core MCP server with stdio protocol
 - 3 tools: pwsh (with mode callback), stdin, list_sessions
 - SessionManager with named sessions and stdin pipe architecture
-- Base module (39 functions), AgentBricks (5 functions + 43 patterns)
+- Base module (39 functions), AgentBlocks (5 functions + 43 patterns)
 - LoraxMod (tree-sitter AST parsing), SessionLog, TokenCounter modules
 - Auto-loading modules on session creation
 - Build-time Quick Reference generation in tool description
@@ -238,7 +250,7 @@ mcp__pwsh-repl__pwsh(script='Get-StreamData test Error | Select-RegexMatch -Patt
 **Token Efficiency Strategy:**
 
 - Module functions NOT in MCP tool schemas
-- Agents discover via `Get-Command -Module AgentBricks`
+- Agents discover via `Get-Command -Module AgentBlocks`
 - Full help via `Get-Help <function> -Full`
 - Functions hidden in modules, not exposed as individual MCP tools
 
@@ -266,7 +278,7 @@ mcp__pwsh-repl__pwsh(
 # Summary shows top errors:
 #   8x: CS0103: The name 'foo' does not exist
 
-# Deep dive with AgentBricks
+# Deep dive with AgentBlocks
 mcp__pwsh-repl__pwsh(script='''
 Get-StreamData build Error |
     Select-RegexMatch -Pattern (Get-Patterns -Name "MSBuild").Pattern |
@@ -310,9 +322,28 @@ pwsh('$env:lint_output | Extract-Regex -Pattern (Get-Patterns -Name "myapp-lint"
 pwsh("Save-Project -Path '.brickyard.json'")
 ```
 
+## Security
+
+**Execution Model:** The MCP server runs with your user privileges - same as any terminal.
+
+**Audit Logging:** Enable command logging via environment variable:
+
+```json
+{
+  "env": {
+    "PWSH_MCP_AUDIT_LOG": "C:\\logs\\pwsh-mcp-audit.log"
+  }
+}
+```
+
+Log format:
+```
+[2024-01-15 14:32:01.123] EXECUTE session=default content="Get-Process | Select -First 5"
+```
+
 ## Requirements
 
-- .NET 8.0 SDK
+- .NET 8.0 SDK (for building only - not needed to run pre-built releases)
 - Windows x64 (PowerShell SDK dependency)
 - Claude Code with MCP support
 
@@ -325,16 +356,16 @@ dotnet restore
 dotnet build
 ```
 
-Build output: `bin/Debug/net8.0-windows/win-x64/`
+Build output: `release/v0.1.0/`
 - PowerShellMcpServer.exe
 - PowerShell SDK runtime libraries (auto-copied)
-- All modules (Base, AgentBricks, LoraxMod, TokenCounter) auto-copied to Modules/
+- All modules (AgentBlocks, LoraxMod, TokenCounter) auto-copied to Modules/
 
 ## Contributing
 
 This is a custom MCP server for personal/organizational use. Contributions welcome for:
 
-- Additional AgentBricks patterns
+- Additional AgentBlocks patterns
 - Performance optimizations
 - Bug fixes
 - Documentation improvements
