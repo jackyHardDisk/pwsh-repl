@@ -24,6 +24,8 @@ public class StdioTool
         string? data = null,
         [Description("Close stdin to signal EOF")]
         bool close = false,
+        [Description("Stop/kill the background process and populate DevRun cache for Get-BackgroundData")]
+        bool stop = false,
         [Description("Read and return stdout/stderr output (only for background processes, default: true)")]
         bool readOutput = true,
         [Description("Session ID (default: 'default')")]
@@ -32,7 +34,7 @@ public class StdioTool
         // If background process name specified, interact with that process
         if (!string.IsNullOrEmpty(name))
         {
-            return HandleBackgroundProcess(sessionId, name, data, close, readOutput);
+            return HandleBackgroundProcess(sessionId, name, data, close, stop, readOutput);
         }
 
         // Otherwise, write to session stdin pipe (legacy behavior)
@@ -56,12 +58,38 @@ public class StdioTool
     /// <summary>
     ///     Handle background process stdio operations via SessionManager.
     /// </summary>
-    private string HandleBackgroundProcess(string sessionId, string name, string? data, bool close, bool readOutput)
+    private string HandleBackgroundProcess(string sessionId, string name, string? data, bool close, bool stop, bool readOutput)
     {
         var result = new StringBuilder();
 
         try
         {
+            // Stop process if requested (do this first, before other operations)
+            if (stop)
+            {
+                // Get final output before stopping
+                var (finalStdout, finalStderr) = _sessionManager.ReadBackgroundOutput(sessionId, name, incremental: false);
+
+                _sessionManager.StopBackgroundProcess(sessionId, name, populateCache: true);
+                result.AppendLine($"Stopped background process '{name}' (output cached for Get-BackgroundData)");
+
+                if (!string.IsNullOrEmpty(finalStdout))
+                {
+                    result.AppendLine();
+                    result.AppendLine("=== final stdout ===");
+                    result.Append(finalStdout);
+                }
+
+                if (!string.IsNullOrEmpty(finalStderr))
+                {
+                    result.AppendLine();
+                    result.AppendLine("=== final stderr ===");
+                    result.Append(finalStderr);
+                }
+
+                return result.ToString().TrimEnd();
+            }
+
             // Write data if provided
             if (!string.IsNullOrEmpty(data))
             {
