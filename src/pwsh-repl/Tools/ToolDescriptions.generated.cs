@@ -10,36 +10,32 @@ public static class ToolDescriptions
 {
     public const string PwshToolDescription = @"Execute PowerShell with persistent sessions. Variables and state persist across calls within the same sessionId.
 
-**Modules auto-loaded:** Base, AgentBricks, LoraxMod, SessionLog, TokenCounter (from PWSH_MCP_MODULES)
+**Modules auto-loaded:** Base, AgentBlocks, LoraxMod, SessionLog, TokenCounter (from PWSH_MCP_MODULES)
 
 **Mode callback pattern:** Use mode parameter to call module functions directly:
   mode='Invoke-DevRun' + script='dotnet build' + kwargs={Streams: ['Error']}
 
 **Auto-caching:** All executions cached in $global:DevRunCache with auto-generated names (pwsh_1, pwsh_2, ...)
+
+**Python scripts:** Use here-string + pipe to avoid escaping issues:
+  $code = @'
+  print(f""Any 'quotes' and {braces} work"")
+  '@
+  $code | python -
 ## Quick Reference
 
 **LoraxMod** - Tree-sitter AST parsing (12 languages)
   Start-LoraxStreamParser [-SessionId] [-ParserScript] [-TimeoutSeconds]
-  Invoke-LoraxStreamQuery [-SessionId] [-Command] [-File] [-Query] [-Context]
+  Invoke-LoraxStreamQuery [-SessionId] [-Command] [-FilePath] [-Query] [-Context]
   Stop-LoraxStreamParser [-SessionId] [-TimeoutSeconds]
   Find-FunctionCalls -Language [-Code] [-FilePath] [-FunctionNames]
   (+5 more: Get-Command -Module LoraxMod)
 
-**Base** - Execution, transformation, state management
-  Invoke-DevRun -Script -Name [-Streams]
-  Get-StreamData -Name -Stream [-Force]
-  Group-BuildErrors -InputObject [-Pattern] [-Threshold]
-  Group-Similar -InputObject [-Threshold] [-Property]
-  Format-Count -InputObject [-Width]
-  Find-Errors [-InputObject] [-Source] [-Pattern] [-CaseSensitive] [-Top]
-  Select-RegexMatch -InputObject -Pattern [-Group] [-All]
-  (+32 more: Get-Command -Module Base)
-
-**AgentBricks** - Pattern learning (43 pre-configured patterns)
+**AgentBlocks** - Pattern learning (43 pre-configured patterns)
   Get-Patterns [-Name] [-Category]
   Set-Pattern -Name -Pattern -Description [-Category]
   Test-Pattern -Name [-Sample] [-ShowMatches]
-  (+2 more: Get-Command -Module AgentBricks)
+  (+38 more: Get-Command -Module AgentBlocks)
 
 **TokenCounter** - Claude token counting (tiktoken)
   Measure-Tokens [-Text] [-Model] [-CondaEnvironment]
