@@ -13,8 +13,9 @@ Send parse or query commands to streaming parser session
 ## SYNTAX
 
 ```
-Invoke-LoraxStreamQuery [[-SessionId] <String>] [[-Command] <String>] [[-File] <String>] [[-Query] <String>]
- [[-Context] <Object>] [[-TimeoutSeconds] <Int32>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Invoke-LoraxStreamQuery [[-SessionId] <String>] [[-Command] <String>] [[-FilePath] <String>]
+ [[-Query] <String>] [[-Context] <Object>] [[-TimeoutSeconds] <Int32>] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -85,14 +86,13 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -File
-File path to process.
-Accepts pipeline input.
+### -FilePath
+File path to process. Accepts pipeline input. Aliases: File, FullName, Path
 
 ```yaml
 Type: String
 Parameter Sets: (All)
-Aliases: FullName, Path
+Aliases: FullName, Path, File
 
 Required: False
 Position: 3

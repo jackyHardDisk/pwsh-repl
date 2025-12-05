@@ -1,6 +1,6 @@
 ---
-external help file: AgentBricks-help.xml
-Module Name: AgentBricks
+external help file: AgentBlocks-help.xml
+Module Name: AgentBlocks
 online version:
 schema: 2.0.0
 ---
@@ -21,7 +21,7 @@ Register-OutputPattern [-Name] <String> [-Command] <String> [-Interactive] [-Cat
 Executes a command, captures output, and helps you define a regex pattern to
 extract structured data.
 This is the primary meta-learning tool for teaching
-AgentBricks about new tools.
+AgentBlocks about new tools.
 
 In interactive mode, presents auto-detected patterns and lets you choose or
 define a custom pattern.

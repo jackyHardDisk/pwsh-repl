@@ -30,7 +30,7 @@ Compatible with DevRun cache ($global:DevRunCache) - use Stop-BackgroundProcess 
 to cache for analysis with Get-StreamData, Get-BuildError, Group-BuildErrors, etc.
 
 After stopping, output is stored in $global:DevRunCache using the same format as Invoke-DevRun,
-making background process output compatible with all Base/AgentBricks analysis functions.
+making background process output compatible with all Base/AgentBlocks analysis functions.
 
 ## EXAMPLES
 
@@ -182,7 +182,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ## NOTES
 Integrates with DevRun cache system ($global:DevRunCache).
 After Stop-BackgroundProcess,
-use Get-StreamData to retrieve output for analysis with all Base/AgentBricks functions.
+use Get-StreamData to retrieve output for analysis with all Base/AgentBlocks functions.
 
 Process output captured to temp files during execution, moved to DevRun cache
 on stop for compatibility with Get-StreamData, Get-BuildError, etc.

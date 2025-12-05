@@ -121,7 +121,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ## OUTPUTS
 
 ## NOTES
-Requires AgentBricks patterns to be loaded (Get-Patterns).
+Requires AgentBlocks patterns to be loaded (Get-Patterns).
 Pattern must have named groups: file, line, code, message.
 
 ## RELATED LINKS
