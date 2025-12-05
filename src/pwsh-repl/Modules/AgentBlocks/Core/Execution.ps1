@@ -80,63 +80,59 @@ function Invoke-DevRun {
         throw "DevRunCache not initialized. This should be set up by SessionManager.cs"
     }
 
-    # Capture all output streams
+    # Capture all PowerShell streams (standardized nomenclature)
+    # PowerShell 6 streams: Output (1), Error (2), Warning (3), Verbose (4), Debug (5), Information (6)
     $output = @{
         Script = $Script
         Timestamp = Get-Date
-        Stdout = [System.Collections.ArrayList]::new()
-        Stderr = [System.Collections.ArrayList]::new()
-        Streams = @{
-            Error = [System.Collections.ArrayList]::new()
-            Warning = [System.Collections.ArrayList]::new()
-            Verbose = [System.Collections.ArrayList]::new()
-            Debug = [System.Collections.ArrayList]::new()
-            Information = [System.Collections.ArrayList]::new()
-            Progress = [System.Collections.ArrayList]::new()
-        }
+        Output = [System.Collections.ArrayList]::new()
+        Error = [System.Collections.ArrayList]::new()
+        Warning = [System.Collections.ArrayList]::new()
+        Verbose = [System.Collections.ArrayList]::new()
+        Debug = [System.Collections.ArrayList]::new()
+        Information = [System.Collections.ArrayList]::new()
+        Progress = [System.Collections.ArrayList]::new()
     }
 
-    # Execute script with stream capture (2>&1 captures all streams)
+    # Execute script with stream capture (*>&1 redirects all 6 streams to output)
     $scriptBlock = [scriptblock]::Create($Script)
 
     try {
-        $results = & $scriptBlock 2>&1
+        $results = & $scriptBlock *>&1
 
         foreach ($item in $results) {
             if ($item -is [System.Management.Automation.ErrorRecord]) {
-                $null = $output.Streams.Error.Add($item.ToString())
-                $null = $output.Stderr.Add($item.ToString())
+                $null = $output.Error.Add($item.ToString())
             }
             elseif ($item -is [System.Management.Automation.WarningRecord]) {
-                $null = $output.Streams.Warning.Add($item.ToString())
+                $null = $output.Warning.Add($item.ToString())
             }
             elseif ($item -is [System.Management.Automation.VerboseRecord]) {
-                $null = $output.Streams.Verbose.Add($item.ToString())
+                $null = $output.Verbose.Add($item.ToString())
             }
             elseif ($item -is [System.Management.Automation.DebugRecord]) {
-                $null = $output.Streams.Debug.Add($item.ToString())
+                $null = $output.Debug.Add($item.ToString())
             }
             elseif ($item -is [System.Management.Automation.InformationRecord]) {
-                $null = $output.Streams.Information.Add($item.Message.ToString())
+                $null = $output.Information.Add($item.MessageData.ToString())
             }
             elseif ($item -is [System.Management.Automation.ProgressRecord]) {
-                $null = $output.Streams.Progress.Add($item.ToString())
+                $null = $output.Progress.Add($item.ToString())
             }
             else {
-                # Regular output (stdout)
-                $null = $output.Stdout.Add($item.ToString())
+                # Regular output (success stream)
+                $null = $output.Output.Add($item.ToString())
             }
         }
     }
     catch {
-        $null = $output.Streams.Error.Add($_.ToString())
-        $null = $output.Stderr.Add($_.ToString())
+        $null = $output.Error.Add($_.ToString())
     }
 
     # Store in cache
     $global:DevRunCache[$Name] = $output
 
-    Write-Verbose "Cached output for '$Name': $($output.Stdout.Count) stdout, $($output.Streams.Error.Count) errors"
+    Write-Verbose "Cached output for '$Name': $($output.Output.Count) output, $($output.Error.Count) errors"
 
     # Generate condensed summary
     $summary = [System.Text.StringBuilder]::new()
@@ -145,9 +141,9 @@ function Invoke-DevRun {
 
     # Show requested streams with frequency analysis
     foreach ($streamName in $Streams) {
-        if (-not $output.Streams.ContainsKey($streamName)) { continue }
+        if (-not $output.ContainsKey($streamName)) { continue }
 
-        $items = $output.Streams[$streamName]
+        $items = $output[$streamName]
         if ($items.Count -eq 0) { continue }
 
         $unique = ($items | Select-Object -Unique).Count
@@ -171,7 +167,7 @@ function Invoke-DevRun {
     }
 
     # Output line count (always show)
-    $null = $summary.AppendLine("Output: $($output.Stdout.Count.ToString().PadLeft(6)) lines")
+    $null = $summary.AppendLine("Output: $($output.Output.Count.ToString().PadLeft(6)) lines")
     $null = $summary.AppendLine()
 
     # Storage info
@@ -197,10 +193,10 @@ function Get-DevRunOutput {
     Cache name to retrieve. Use Get-DevRunCacheList to see available names.
 
     .PARAMETER Stream
-    Which output to retrieve:
-    - Stdout: Regular command output (default)
-    - Stderr: Error stream output
-    - Error, Warning, Verbose, Debug, Information, Progress: PowerShell streams
+    Which output to retrieve (PowerShell stream nomenclature):
+    - Output: Success stream / regular command output (default)
+    - Error: Error stream
+    - Warning, Verbose, Debug, Information, Progress: Other PowerShell streams
     - All: Complete cached object with all data and metadata
 
     .EXAMPLE
@@ -212,8 +208,8 @@ function Get-DevRunOutput {
     # Returns: Complete cache entry with Script, Timestamp, and all streams
 
     .EXAMPLE
-    Get-DevRunOutput -Name 'build' -Stream 'Stdout' | Select-String 'warning'
-    # Pipe stdout to further analysis
+    Get-DevRunOutput -Name 'build' -Stream 'Output' | Select-String 'warning'
+    # Pipe output to further analysis
 
     .NOTES
     Cache persists for session lifetime. Use Export-Environment to save to disk.
@@ -224,8 +220,8 @@ function Get-DevRunOutput {
         [string]$Name,
 
         [Parameter()]
-        [ValidateSet('Stdout', 'Stderr', 'Error', 'Warning', 'Verbose', 'Debug', 'Information', 'Progress', 'All')]
-        [string]$Stream = 'Stdout'
+        [ValidateSet('Output', 'Error', 'Warning', 'Verbose', 'Debug', 'Information', 'Progress', 'All')]
+        [string]$Stream = 'Output'
     )
 
     if (-not $global:DevRunCache) {
@@ -242,15 +238,13 @@ function Get-DevRunOutput {
     if ($Stream -eq 'All') {
         return $cached
     }
-    elseif ($Stream -in @('Error', 'Warning', 'Verbose', 'Debug', 'Information', 'Progress')) {
-        return $cached.Streams[$Stream]
-    }
     else {
+        # All streams stored at top level with PowerShell nomenclature
         return $cached[$Stream]
     }
 }
 
-# Clear-DevRunCache is in Base/State/Cache.ps1 (full-featured version from AgentBricks)
+# Clear-DevRunCache is in Base/State/Cache.ps1 (full-featured version from AgentBlocks)
 
 function Get-DevRunCacheList {
     <#
@@ -265,7 +259,7 @@ function Get-DevRunCacheList {
     Get-DevRunCacheList
     # Returns: Table of cached entries
 
-    Name      Timestamp            StdoutLines  ErrorCount  WarningCount
+    Name      Timestamp            OutputLines  ErrorCount  WarningCount
     ----      ---------            -----------  ----------  ------------
     build     2025-11-22 23:45:12  847          12          5
     test      2025-11-22 23:46:30  234          0           2
@@ -284,9 +278,9 @@ function Get-DevRunCacheList {
         [PSCustomObject]@{
             Name = $_.Key
             Timestamp = $_.Value.Timestamp
-            StdoutLines = $_.Value.Stdout.Count
-            ErrorCount = $_.Value.Streams.Error.Count
-            WarningCount = $_.Value.Streams.Warning.Count
+            OutputLines = $_.Value.Output.Count
+            ErrorCount = $_.Value.Error.Count
+            WarningCount = $_.Value.Warning.Count
         }
     } | Sort-Object Timestamp -Descending | Format-Table -AutoSize
 }

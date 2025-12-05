@@ -1447,7 +1447,7 @@ PS&gt; Find-Errors test2.log | Export-ToFile all-errors.txt -Append
       </maml:description>
     </command:details>
     <maml:description>
-      <maml:para>Convenience wrapper over Get-StreamData for background processes. Retrieves captured output for analysis with AgentBricks functions.</maml:para>
+      <maml:para>Convenience wrapper over Get-StreamData for background processes. Retrieves captured output for analysis with AgentBlocks functions.</maml:para>
       <maml:para>Functionally identical to Get-StreamData - use whichever feels more natural. This function exists for semantic clarity when working with background processes.</maml:para>
     </maml:description>
     <command:syntax>
@@ -2847,7 +2847,7 @@ Count Code   Files Message
     <command:returnValues />
     <maml:alertSet>
       <maml:alert>
-        <maml:para>Requires AgentBricks patterns to be loaded (Get-Patterns). Pattern must have named groups: file, line, code, message.</maml:para>
+        <maml:para>Requires AgentBlocks patterns to be loaded (Get-Patterns). Pattern must have named groups: file, line, code, message.</maml:para>
       </maml:alert>
     </maml:alertSet>
     <command:examples>
@@ -3315,7 +3315,7 @@ Loaded 15 patterns from .brickyard.json</dev:code>
     </command:details>
     <maml:description>
       <maml:para>Runs process in background, capturing stdout/stderr to temporary files. Compatible with DevRun cache ($global:DevRunCache) - use Stop-BackgroundProcess to move output to cache for analysis with Get-StreamData, Get-BuildError, Group-BuildErrors, etc.</maml:para>
-      <maml:para>After stopping, output is stored in $global:DevRunCache using the same format as Invoke-DevRun, making background process output compatible with all Base/AgentBricks analysis functions.</maml:para>
+      <maml:para>After stopping, output is stored in $global:DevRunCache using the same format as Invoke-DevRun, making background process output compatible with all Base/AgentBlocks analysis functions.</maml:para>
     </maml:description>
     <command:syntax>
       <command:syntaxItem>
@@ -3511,7 +3511,7 @@ Loaded 15 patterns from .brickyard.json</dev:code>
     <command:returnValues />
     <maml:alertSet>
       <maml:alert>
-        <maml:para>Integrates with DevRun cache system ($global:DevRunCache). After Stop-BackgroundProcess, use Get-StreamData to retrieve output for analysis with all Base/AgentBricks functions.</maml:para>
+        <maml:para>Integrates with DevRun cache system ($global:DevRunCache). After Stop-BackgroundProcess, use Get-StreamData to retrieve output for analysis with all Base/AgentBlocks functions.</maml:para>
         <maml:para>Process output captured to temp files during execution, moved to DevRun cache on stop for compatibility with Get-StreamData, Get-BuildError, etc.</maml:para>
       </maml:alert>
     </maml:alertSet>
@@ -4185,7 +4185,7 @@ Executes scripts and updates their metadata</dev:code>
         <maml:para></maml:para>
         <maml:para>Design Philosophy: - Pipeline-first: Output flows naturally without property access</maml:para>
         <maml:para>- Standard errors: Follows PowerShell error handling conventions</maml:para>
-        <maml:para>- Composable: Works seamlessly with AgentBricks functions</maml:para>
+        <maml:para>- Composable: Works seamlessly with AgentBlocks functions</maml:para>
         <maml:para>- Debuggable: Error messages include duration and source info</maml:para>
         <maml:para></maml:para>
         <maml:para>Performance Considerations: - Job creation overhead makes this unsuitable for sub-second timeouts</maml:para>
@@ -5514,8 +5514,8 @@ Errors: 3 (2 unique)</dev:code>
       </maml:description>
     </command:details>
     <maml:description>
-      <maml:para>Stops background process started with Invoke-BackgroundProcess and moves captured output to DevRun cache ($global:DevRunCache) for analysis with Get-StreamData, Get-BuildError, Group-BuildErrors, and all other Base/AgentBricks functions.</maml:para>
-      <maml:para>After stopping, output is stored in $global:DevRunCache using the same format as Invoke-DevRun, making background process output compatible with all Base/AgentBricks analysis functions.</maml:para>
+      <maml:para>Stops background process started with Invoke-BackgroundProcess and moves captured output to DevRun cache ($global:DevRunCache) for analysis with Get-StreamData, Get-BuildError, Group-BuildErrors, and all other Base/AgentBlocks functions.</maml:para>
+      <maml:para>After stopping, output is stored in $global:DevRunCache using the same format as Invoke-DevRun, making background process output compatible with all Base/AgentBlocks analysis functions.</maml:para>
       <maml:para>This makes background process output fully compatible with Invoke-DevRun workflows.</maml:para>
     </maml:description>
     <command:syntax>
@@ -5600,7 +5600,7 @@ Errors: 3 (2 unique)</dev:code>
     <command:returnValues />
     <maml:alertSet>
       <maml:alert>
-        <maml:para>Output stored in DevRun cache ($global:DevRunCache) under key Name. Compatible with all Base/AgentBricks analysis functions.</maml:para>
+        <maml:para>Output stored in DevRun cache ($global:DevRunCache) under key Name. Compatible with all Base/AgentBlocks analysis functions.</maml:para>
         <maml:para>Returns summary with error counts and top errors (like Invoke-DevRun).</maml:para>
       </maml:alert>
     </maml:alertSet>

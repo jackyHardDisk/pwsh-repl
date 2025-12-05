@@ -540,7 +540,7 @@ function Group-BuildErrors
         3 warning     2 unused variable 'bar'
 
     .NOTES
-    Requires AgentBricks patterns to be loaded (Get-Patterns).
+    Requires AgentBlocks patterns to be loaded (Get-Patterns).
     Pattern must have named groups: file, line, code, message.
     #>
     [CmdletBinding()]

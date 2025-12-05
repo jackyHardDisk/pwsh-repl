@@ -102,7 +102,7 @@ function Invoke-WithTimeout
         Design Philosophy:
         - Pipeline-first: Output flows naturally without property access
         - Standard errors: Follows PowerShell error handling conventions
-        - Composable: Works seamlessly with AgentBricks functions
+        - Composable: Works seamlessly with AgentBlocks functions
         - Debuggable: Error messages include duration and source info
 
         Performance Considerations:

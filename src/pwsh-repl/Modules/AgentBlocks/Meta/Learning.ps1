@@ -9,7 +9,7 @@ function Set-Pattern
     other analysis functions. Patterns should use named capture groups to extract
     structured data from tool output.
 
-    This is the foundational meta-tool for teaching AgentBricks about new tools.
+    This is the foundational meta-tool for teaching AgentBlocks about new tools.
     Once a pattern is defined, it can be used across analysis pipelines.
 
     .PARAMETER Name
@@ -284,7 +284,7 @@ function Register-OutputPattern
     .DESCRIPTION
     Executes a command, captures output, and helps you define a regex pattern to
     extract structured data. This is the primary meta-learning tool for teaching
-    AgentBricks about new tools.
+    AgentBlocks about new tools.
 
     In interactive mode, presents auto-detected patterns and lets you choose or
     define a custom pattern. In non-interactive mode, auto-detects and stores
