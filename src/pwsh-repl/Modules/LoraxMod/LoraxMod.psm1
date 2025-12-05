@@ -500,8 +500,8 @@ function Invoke-LoraxStreamQuery {
     .PARAMETER Command
     Command type: parse, query, or ping. Default: 'parse'
 
-    .PARAMETER File
-    File path to process. Accepts pipeline input.
+    .PARAMETER FilePath
+    File path to process. Accepts pipeline input. Aliases: File, FullName, Path
 
     .PARAMETER Query
     Tree-sitter query string (required for 'query' command)
@@ -514,7 +514,7 @@ function Invoke-LoraxStreamQuery {
 
     .EXAMPLE
     Start-LoraxStreamParser
-    Invoke-LoraxStreamQuery -File "sample.c" -Command parse
+    Invoke-LoraxStreamQuery -FilePath "sample.c" -Command parse
     Stop-LoraxStreamParser
 
     .EXAMPLE
@@ -523,12 +523,42 @@ function Invoke-LoraxStreamQuery {
     Stop-LoraxStreamParser -SessionId 'batch'
 
     .EXAMPLE
+    # Find all integers in a Python file and extract line numbers
+    Start-LoraxStreamParser -SessionId demo
+    $q = Invoke-LoraxStreamQuery -SessionId demo -FilePath "app.py" -Command query -Query '(integer) @num'
+    $q.result.queryResults | ForEach-Object {
+        [PSCustomObject]@{
+            Line = $_.startPosition.row + 1  # 0-indexed to 1-indexed
+            Value = $_.text
+        }
+    }
+    Stop-LoraxStreamParser -SessionId demo
+
+    .EXAMPLE
     $query = '(function_definition name: (identifier) @func)'
-    Invoke-LoraxStreamQuery -File "app.c" -Command query -Query $query
+    Invoke-LoraxStreamQuery -FilePath "app.c" -Command query -Query $query
+
+    .OUTPUTS
+    PSCustomObject with properties:
+    - status: "ok" or "error"
+    - result.queryResults: Array of matches (for 'query' command), each with:
+        - text: The matched source text
+        - name: Capture name from query (@num, @fn, etc.)
+        - startPosition.row: 0-indexed line number (add 1 for display)
+        - startPosition.column: Column offset
+        - endPosition.row/column: End position
+        - startIndex/endIndex: Byte offsets in source
+    - result.captureCount: Total matches found
+    - result.segments: Array of code segments (for 'parse' command)
+    - result.file: File path processed
+    - result.language: Detected/specified language
 
     .NOTES
     Parser session must be started with Start-LoraxStreamParser first.
     Use pipeline for efficient batch processing of multiple files.
+
+    IMPORTANT: startPosition.row is 0-indexed. Add 1 for human-readable line numbers:
+        $lineNumber = $match.startPosition.row + 1
 
     Performance: Single session eliminates per-file process spawn overhead.
     Achieves 40x+ speedup for batch processing vs spawning node per file.
@@ -546,8 +576,8 @@ function Invoke-LoraxStreamQuery {
         [string]$Command = 'parse',
 
         [Parameter(ValueFromPipeline, ValueFromPipelineByPropertyName)]
-        [Alias('FullName', 'Path', 'FilePath')]
-        [string]$File,
+        [Alias('FullName', 'Path', 'File')]
+        [string]$FilePath,
 
         [string]$Query,
 
@@ -578,9 +608,9 @@ function Invoke-LoraxStreamQuery {
             # Build command object
             $cmdObject = @{ command = $Command }
 
-            if ($File) {
+            if ($FilePath) {
                 # Convert to absolute path and forward slashes
-                $absolutePath = (Resolve-Path $File -ErrorAction Stop).Path
+                $absolutePath = (Resolve-Path $FilePath -ErrorAction Stop).Path
                 $cmdObject.file = $absolutePath.Replace('\', '/')
             }
 
@@ -600,13 +630,21 @@ function Invoke-LoraxStreamQuery {
             # Send command
             $cmdJson = $cmdObject | ConvertTo-Json -Compress
             $process.StandardInput.WriteLine($cmdJson)
+            $process.StandardInput.BaseStream.Flush()
 
-            # Read response with timeout
-            $responseTask = $process.StandardOutput.ReadLineAsync()
+            # Read response with timeout using synchronous read wrapped in Task
+            # This avoids stream collision issues with ReadLineAsync() in rapid loops
+            $reader = $process.StandardOutput
+            $readTask = [System.Threading.Tasks.Task]::Run([Func[string]]{
+                $reader.ReadLine()
+            })
             $timeout = New-TimeSpan -Seconds $TimeoutSeconds
 
-            if ($responseTask.Wait($timeout)) {
-                $responseLine = $responseTask.Result
+            if ($readTask.Wait($timeout)) {
+                $responseLine = $readTask.Result
+                if ($null -eq $responseLine) {
+                    throw "Parser returned null (process may have exited)"
+                }
                 $response = $responseLine | ConvertFrom-Json
 
                 if ($response.status -eq 'ok' -or $response.status -eq 'pong') {
@@ -616,18 +654,18 @@ function Invoke-LoraxStreamQuery {
                 } else {
                     # Error from parser
                     $session.Errors++
-                    Write-Warning "Parser error for '$File': $($response.error.message)"
+                    Write-Warning "Parser error for '$FilePath': $($response.error.message)"
                     $results += $response
                 }
             } else {
                 # Timeout
                 $session.Errors++
-                throw "Parser timeout after $TimeoutSeconds seconds for file: $File"
+                throw "Parser timeout after $TimeoutSeconds seconds for file: $FilePath"
             }
 
         } catch {
             $session.Errors++
-            Write-Error "Failed to process '$File': $_"
+            Write-Error "Failed to process '$FilePath': $_"
         }
     }
 
@@ -698,17 +736,23 @@ function Stop-LoraxStreamParser {
             # Send shutdown command
             $shutdownCmd = @{ command = 'shutdown' } | ConvertTo-Json -Compress
             $process.StandardInput.WriteLine($shutdownCmd)
+            $process.StandardInput.BaseStream.Flush()
 
-            # Try to read shutdown response
-            $responseTask = $process.StandardOutput.ReadLineAsync()
+            # Try to read shutdown response using synchronous read wrapped in Task
+            $reader = $process.StandardOutput
+            $readTask = [System.Threading.Tasks.Task]::Run([Func[string]]{
+                $reader.ReadLine()
+            })
             $timeout = New-TimeSpan -Seconds $TimeoutSeconds
 
             $finalStats = $null
 
-            if ($responseTask.Wait($timeout)) {
-                $responseLine = $responseTask.Result
-                $response = $responseLine | ConvertFrom-Json
-                $finalStats = $response.finalStats
+            if ($readTask.Wait($timeout)) {
+                $responseLine = $readTask.Result
+                if ($responseLine) {
+                    $response = $responseLine | ConvertFrom-Json
+                    $finalStats = $response.finalStats
+                }
             }
 
             # Wait for process to exit
@@ -1299,13 +1343,17 @@ function Send-REPLCommand {
     try {
         # Send command
         $process.StandardInput.WriteLine($Command)
+        $process.StandardInput.BaseStream.Flush()
 
-        # Read response with timeout
-        $responseTask = $process.StandardOutput.ReadLineAsync()
+        # Read response with timeout using synchronous read wrapped in Task
+        $reader = $process.StandardOutput
+        $readTask = [System.Threading.Tasks.Task]::Run([Func[string]]{
+            $reader.ReadLine()
+        })
         $timeout = New-TimeSpan -Seconds $TimeoutSeconds
 
-        if ($responseTask.Wait($timeout)) {
-            $responseTask.Result
+        if ($readTask.Wait($timeout)) {
+            $readTask.Result
         }
         else {
             Write-Warning "REPL command timed out after $TimeoutSeconds seconds"
