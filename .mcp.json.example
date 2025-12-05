@@ -2,11 +2,12 @@
   "mcpServers": {
     "pwsh-repl": {
       "type": "stdio",
-      "command": "C:\\path\\to\\pwsh-repl\\bin\\Debug\\net8.0-windows\\win-x64\\PowerShellMcpServer.exe",
+      "command": "C:\\path\\to\\pwsh-repl\\release\\v0.1.0\\PowerShellMcpServer.exe",
       "args": [],
       "env": {
         "PWSH_MCP_TIMEOUT_DEFAULT": "60",
-        "PWSH_MCP_MODULES": "C:\\path\\to\\SessionLog.psd1;C:\\path\\to\\other\\Module.psd1"
+        "PWSH_MCP_MODULES": "C:\\path\\to\\SessionLog.psd1;C:\\path\\to\\other\\Module.psd1",
+        "PWSH_MCP_AUDIT_LOG": "C:\\logs\\pwsh-mcp-audit.log"
       }
     }
   }

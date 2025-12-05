@@ -7,6 +7,10 @@
         <UseRidGraph>true</UseRidGraph>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
+        <Version>0.1.0</Version>
+        <OutputPath>release\v$(Version)\</OutputPath>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     </PropertyGroup>
 
     <ItemGroup>
@@ -35,21 +39,12 @@
               SkipUnchangedFiles="true"/>
     </Target>
 
-    <Target Name="CopyBaseModule" AfterTargets="Build">
+    <Target Name="CopyAgentBlocksModule" AfterTargets="Build">
         <ItemGroup>
-            <BaseFiles Include="src\pwsh-repl\Modules\Base\**\*.*"/>
+            <AgentBlocksFiles Include="src\pwsh-repl\Modules\AgentBlocks\**\*.*"/>
         </ItemGroup>
-        <Copy SourceFiles="@(BaseFiles)"
-              DestinationFolder="$(OutDir)Modules\Base\%(RecursiveDir)"
-              SkipUnchangedFiles="true"/>
-    </Target>
-
-    <Target Name="CopyAgentBricksModule" AfterTargets="Build">
-        <ItemGroup>
-            <AgentBricksFiles Include="src\pwsh-repl\Modules\AgentBricks\**\*.*"/>
-        </ItemGroup>
-        <Copy SourceFiles="@(AgentBricksFiles)"
-              DestinationFolder="$(OutDir)Modules\AgentBricks\%(RecursiveDir)"
+        <Copy SourceFiles="@(AgentBlocksFiles)"
+              DestinationFolder="$(OutDir)Modules\AgentBlocks\%(RecursiveDir)"
               SkipUnchangedFiles="true"/>
     </Target>
 

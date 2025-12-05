@@ -1,6 +1,7 @@
 # .NET Build Artifacts
 bin/
 obj/
+release/
 *.user
 *.suo
 *.userosscache
@@ -41,6 +42,7 @@ test/
 *.temp
 ~$*
 *.bak
+*.internal
 
 # Development scripts (not part of distribution)
 fix_*.ps1
