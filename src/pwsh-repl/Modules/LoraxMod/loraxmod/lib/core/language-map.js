@@ -31,11 +31,12 @@ function detectLanguage(filePath) {
     '.c': 'c',
     '.h': 'c',
     '.cpp': 'cpp',
-    '.hpp': 'cpp',
     '.cc': 'cpp',
-    '.hh': 'cpp',
     '.cxx': 'cpp',
+    '.hpp': 'cpp',
+    '.hh': 'cpp',
     '.hxx': 'cpp',
+    '.h++': 'cpp',
     '.css': 'css',
     '.scss': 'css',
     '.sass': 'css',
@@ -70,8 +71,8 @@ function getGrammarFile(language) {
     'c': 'tree-sitter-c.wasm',
     'cpp': 'tree-sitter-cpp.wasm',
     'css': 'tree-sitter-css.wasm',
-    'html': 'tree-sitter-html.wasm',
-    'fortran': 'tree-sitter-fortran.wasm'
+    'fortran': 'tree-sitter-fortran.wasm',
+    'html': 'tree-sitter-html.wasm'
   };
 
   return grammarFiles[language] || null;
@@ -82,7 +83,10 @@ function getGrammarFile(language) {
  * @returns {string[]} Array of language identifiers
  */
 function getSupportedLanguages() {
-  return ['javascript', 'python', 'powershell', 'bash', 'r', 'csharp', 'rust', 'c', 'cpp', 'css', 'html', 'fortran'];
+  return [
+    'javascript', 'python', 'powershell', 'bash', 'r',
+    'csharp', 'rust', 'c', 'cpp', 'css', 'fortran', 'html'
+  ];
 }
 
 module.exports = {

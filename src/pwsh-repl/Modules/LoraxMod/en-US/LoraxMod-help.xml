@@ -395,10 +395,10 @@ Get only POSIX headers</dev:code>
           </dev:type>
           <dev:defaultValue>Parse</dev:defaultValue>
         </command:parameter>
-        <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="True (ByPropertyName, ByValue)" position="3" aliases="FullName, Path">
-          <maml:name>File</maml:name>
+        <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="True (ByPropertyName, ByValue)" position="3" aliases="FullName, Path, File">
+          <maml:name>FilePath</maml:name>
           <maml:description>
-            <maml:para>File path to process. Accepts pipeline input.</maml:para>
+            <maml:para>File path to process. Accepts pipeline input. Aliases: File, FullName, Path</maml:para>
           </maml:description>
           <command:parameterValue required="true" variableLength="false">String</command:parameterValue>
           <dev:type>
@@ -482,10 +482,10 @@ Get only POSIX headers</dev:code>
         </dev:type>
         <dev:defaultValue>Parse</dev:defaultValue>
       </command:parameter>
-      <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="True (ByPropertyName, ByValue)" position="3" aliases="FullName, Path">
-        <maml:name>File</maml:name>
+      <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="True (ByPropertyName, ByValue)" position="3" aliases="FullName, Path, File">
+        <maml:name>FilePath</maml:name>
         <maml:description>
-          <maml:para>File path to process. Accepts pipeline input.</maml:para>
+          <maml:para>File path to process. Accepts pipeline input. Aliases: File, FullName, Path</maml:para>
         </maml:description>
         <command:parameterValue required="true" variableLength="false">String</command:parameterValue>
         <dev:type>
@@ -617,7 +617,7 @@ Invoke-LoraxStreamQuery -File "app.c" -Command query -Query $query</dev:code>
           </dev:type>
           <dev:defaultValue>None</dev:defaultValue>
         </command:parameter>
-        <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="True (ByPropertyName, ByValue)" position="2" aliases="FullName, Path">
+        <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="True (ByPropertyName, ByValue)" position="2" aliases="FullName, Path, FilePath">
           <maml:name>Files</maml:name>
           <maml:description>
             <maml:para>Array of file paths to process, or pipeline input</maml:para>
@@ -751,7 +751,7 @@ Invoke-LoraxStreamQuery -File "app.c" -Command query -Query $query</dev:code>
         </dev:type>
         <dev:defaultValue>None</dev:defaultValue>
       </command:parameter>
-      <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="True (ByPropertyName, ByValue)" position="2" aliases="FullName, Path">
+      <command:parameter required="false" variableLength="true" globbing="false" pipelineInput="True (ByPropertyName, ByValue)" position="2" aliases="FullName, Path, FilePath">
         <maml:name>Files</maml:name>
         <maml:description>
           <maml:para>Array of file paths to process, or pipeline input</maml:para>

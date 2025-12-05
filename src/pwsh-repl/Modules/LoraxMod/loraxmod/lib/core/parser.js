@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const TreeSitter = require('web-tree-sitter');
 const { getGrammarFile } = require('./language-map');
+const { GrammarNotFoundError, ParserInitError, LanguageLoadError } = require('../errors');
 
 // Parser singleton
 let parserInitialized = false;
@@ -24,8 +25,7 @@ async function initParser() {
     parser = new TreeSitter.Parser();
     parserInitialized = true;
   } catch (error) {
-    console.error("Failed to initialize parser:", error.message);
-    throw error;
+    throw new ParserInitError(error);
   }
   return parser;
 }
@@ -43,7 +43,7 @@ async function loadLanguage(language, grammarDir = null) {
 
   const grammarFile = getGrammarFile(language);
   if (!grammarFile) {
-    console.error(`No grammar available for language: ${language}`);
+    // Return null for unsupported languages (not an error)
     return null;
   }
 
@@ -52,9 +52,7 @@ async function loadLanguage(language, grammarDir = null) {
   const grammarPath = path.join(grammarDir || defaultGrammarDir, grammarFile);
 
   if (!fs.existsSync(grammarPath)) {
-    console.error(`Grammar file not found: ${grammarPath}`);
-    console.error(`Please ensure ${grammarFile} is in the grammars directory`);
-    return null;
+    throw new GrammarNotFoundError(language, grammarPath);
   }
 
   try {
@@ -62,8 +60,7 @@ async function loadLanguage(language, grammarDir = null) {
     loadedLanguages.set(language, languageObj);
     return languageObj;
   } catch (error) {
-    console.error(`Failed to load grammar for ${language}:`, error.message);
-    return null;
+    throw new LanguageLoadError(language, grammarPath, error);
   }
 }
 

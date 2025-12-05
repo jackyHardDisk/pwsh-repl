@@ -1,5 +1,5 @@
 // HTML extractor
-// Supports: elements, scripts, styles
+// Minimal implementation - focuses on embedded code blocks and semantic landmarks
 
 const { TreeSitterExtractor } = require('./base-extractor');
 
@@ -10,46 +10,85 @@ class HTMLExtractor extends TreeSitterExtractor {
 
   processNode(node, ancestors) {
     switch (node.type) {
-      case 'element':
-        // HTML elements like <div>, <button>, etc.
-        const startTag = node.children.find(c => c.type === 'start_tag');
-        if (startTag) {
-          const tagNameNode = startTag.children.find(c => c.type === 'tag_name');
-          if (tagNameNode) {
-            const elementName = tagNameNode.text;
-            // Extract id or class if available
-            let identifier = elementName;
-            const attributes = startTag.children.filter(c => c.type === 'attribute');
-            for (const attr of attributes) {
-              const attrNameNode = attr.children.find(c => c.type === 'attribute_name');
-              const attrValueNode = attr.children.find(c => c.type === 'quoted_attribute_value');
-              if (attrNameNode && attrValueNode) {
-                if (attrNameNode.text === 'id') {
-                  identifier = `${elementName}#${attrValueNode.text.replace(/["']/g, '')}`;
-                  break;
-                } else if (attrNameNode.text === 'class') {
-                  const className = attrValueNode.text.replace(/["']/g, '').split(/\s+/)[0];
-                  if (className) {
-                    identifier = `${elementName}.${className}`;
-                  }
-                }
-              }
-            }
-            this.addSegment(node, 'element', identifier, ancestors);
-          }
+      case 'script_element':
+        // Extract inline JavaScript blocks
+        const scriptContent = this.getElementContent(node);
+        if (scriptContent && scriptContent.trim().length > 0) {
+          const scriptId = this.getElementId(node) || 'inline-script';
+          this.addSegment(node, 'script_block', scriptId, ancestors);
         }
         break;
 
-      case 'script_element':
-        // <script> tags
-        this.addSegment(node, 'script', 'script', ancestors);
+      case 'style_element':
+        // Extract inline CSS blocks
+        const styleContent = this.getElementContent(node);
+        if (styleContent && styleContent.trim().length > 0) {
+          const styleId = this.getElementId(node) || 'inline-style';
+          this.addSegment(node, 'style_block', styleId, ancestors);
+        }
         break;
 
-      case 'style_element':
-        // <style> tags
-        this.addSegment(node, 'style', 'style', ancestors);
+      case 'element':
+        // Extract elements with id attribute (semantic landmarks)
+        const startTag = node.childForFieldName('start_tag');
+        if (startTag) {
+          const idAttr = this.findAttribute(startTag, 'id');
+          if (idAttr) {
+            const tagName = this.getTagName(startTag);
+            const elementName = `${tagName}#${idAttr}`;
+            this.addSegment(node, 'element', elementName, ancestors);
+          }
+        }
         break;
     }
+  }
+
+  /**
+   * Get text content from element
+   */
+  getElementContent(elementNode) {
+    for (const child of elementNode.children) {
+      if (child.type === 'text' || child.type === 'raw_text') {
+        return child.text;
+      }
+    }
+    return '';
+  }
+
+  /**
+   * Get id attribute from element (if any)
+   */
+  getElementId(elementNode) {
+    const startTag = elementNode.childForFieldName('start_tag');
+    return startTag ? this.findAttribute(startTag, 'id') : null;
+  }
+
+  /**
+   * Get tag name from start_tag node
+   */
+  getTagName(startTagNode) {
+    const nameNode = startTagNode.childForFieldName('name');
+    return nameNode ? nameNode.text : 'unknown';
+  }
+
+  /**
+   * Find attribute value by name
+   */
+  findAttribute(startTagNode, attrName) {
+    const attributes = startTagNode.children.filter(child => child.type === 'attribute');
+
+    for (const attr of attributes) {
+      const name = attr.childForFieldName('name')?.text;
+      if (name === attrName) {
+        const value = attr.childForFieldName('value');
+        if (value) {
+          // Remove quotes from attribute value
+          const rawValue = value.text || '';
+          return rawValue.replace(/^["']|["']$/g, '');
+        }
+      }
+    }
+    return null;
   }
 }
 
