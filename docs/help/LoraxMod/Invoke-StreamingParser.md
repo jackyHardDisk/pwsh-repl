@@ -81,7 +81,7 @@ Array of file paths to process, or pipeline input
 ```yaml
 Type: Object[]
 Parameter Sets: (All)
-Aliases: FullName, Path
+Aliases: FullName, Path, FilePath
 
 Required: False
 Position: 2

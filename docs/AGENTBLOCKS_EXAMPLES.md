@@ -1,4 +1,4 @@
-# AgentBricks Usage Examples
+# AgentBlocks Usage Examples
 
 Sophisticated workflows showing non-intuitive features and tool combinations.
 

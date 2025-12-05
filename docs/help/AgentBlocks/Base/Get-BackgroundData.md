@@ -19,7 +19,7 @@ Get-BackgroundData [-Name] <String> [[-Stream] <String>] [-ProgressAction <Actio
 
 ## DESCRIPTION
 Convenience wrapper over Get-StreamData for background processes.
-Retrieves captured output for analysis with AgentBricks functions.
+Retrieves captured output for analysis with AgentBlocks functions.
 
 Functionally identical to Get-StreamData - use whichever feels more natural.
 This function exists for semantic clarity when working with background processes.

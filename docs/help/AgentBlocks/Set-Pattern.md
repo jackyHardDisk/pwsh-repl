@@ -1,6 +1,6 @@
 ---
-external help file: AgentBricks-help.xml
-Module Name: AgentBricks
+external help file: AgentBlocks-help.xml
+Module Name: AgentBlocks
 online version:
 schema: 2.0.0
 ---
@@ -23,7 +23,7 @@ other analysis functions.
 Patterns should use named capture groups to extract
 structured data from tool output.
 
-This is the foundational meta-tool for teaching AgentBricks about new tools.
+This is the foundational meta-tool for teaching AgentBlocks about new tools.
 Once a pattern is defined, it can be used across analysis pipelines.
 
 ## EXAMPLES

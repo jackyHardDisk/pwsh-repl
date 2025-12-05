@@ -19,10 +19,10 @@ Stop-BackgroundProcess [-Name] <String> [-KeepFiles] [-ProgressAction <ActionPre
 ## DESCRIPTION
 Stops background process started with Invoke-BackgroundProcess and
 moves captured output to DevRun cache ($global:DevRunCache) for analysis with Get-StreamData,
-Get-BuildError, Group-BuildErrors, and all other Base/AgentBricks functions.
+Get-BuildError, Group-BuildErrors, and all other Base/AgentBlocks functions.
 
 After stopping, output is stored in $global:DevRunCache using the same format as Invoke-DevRun,
-making background process output compatible with all Base/AgentBricks analysis functions.
+making background process output compatible with all Base/AgentBlocks analysis functions.
 
 This makes background process output fully compatible with Invoke-DevRun workflows.
 
@@ -117,7 +117,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## NOTES
 Output stored in DevRun cache ($global:DevRunCache) under key Name.
-Compatible with all Base/AgentBricks analysis functions.
+Compatible with all Base/AgentBlocks analysis functions.
 
 Returns summary with error counts and top errors (like Invoke-DevRun).
 

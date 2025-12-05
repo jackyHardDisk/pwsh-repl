@@ -1,6 +1,6 @@
 ---
-external help file: AgentBricks-help.xml
-Module Name: AgentBricks
+external help file: AgentBlocks-help.xml
+Module Name: AgentBlocks
 online version:
 schema: 2.0.0
 ---

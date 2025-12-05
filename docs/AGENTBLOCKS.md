@@ -1,8 +1,8 @@
-# AgentBricks Module Documentation
+# AgentBlocks Module Documentation
 
 ## Overview
 
-AgentBricks is a self-teaching PowerShell module that provides concrete development
+AgentBlocks is a self-teaching PowerShell module that provides concrete development
 tools, pre-configured patterns for common tools, and meta-learning capabilities for
 Claude agents. The module auto-loads when PowerShell MCP sessions are created.
 
@@ -19,9 +19,9 @@ MCP tools only).
 ## Module Structure
 
 ```
-AgentBricks/
-├── AgentBricks.psd1           # Module manifest (35 exported functions)
-├── AgentBricks.psm1           # Main module (BrickStore initialization, auto-loads patterns)
+AgentBlocks/
+├── AgentBlocks.psd1           # Module manifest (35 exported functions)
+├── AgentBlocks.psm1           # Main module (BrickStore initialization, auto-loads patterns)
 ├── Core/
 │   ├── Transform.ps1          # Format-Count, Group-By, Measure-Frequency, Group-Similar, Group-BuildErrors
 │   ├── Extract.ps1            # Select-RegexMatch, Select-TextBetween, Select-Column
@@ -584,7 +584,7 @@ Patterns are loaded automatically on module import. Access via `Get-Patterns`.
 
 ## BrickStore Global State
 
-AgentBricks maintains a global `$BrickStore` hashtable with session-persistent state:
+AgentBlocks maintains a global `$BrickStore` hashtable with session-persistent state:
 
 ```powershell
 $global:BrickStore = @{
@@ -720,7 +720,7 @@ Get-StreamData build Error | Group-Similar -Threshold 0.85 | Show -Top 5
 **On session creation:**
 
 1. SessionManager creates new Runspace
-2. Imports AgentBricks from `Modules/AgentBricks/`
+2. Imports AgentBlocks from `Modules/AgentBlocks/`
 3. Module loads Core, Meta, State, Patterns scripts
 4. Pre-configured patterns populate `$BrickStore.Patterns`
 5. Checks for `.brickyard.json` in current directory, loads if exists
@@ -730,7 +730,7 @@ Get-StreamData build Error | Group-Similar -Threshold 0.85 | Show -Top 5
 
 ```
 ╔════════════════════════════════════════════════════════╗
-║          AgentBricks - Development Toolkit            ║
+║          AgentBlocks - Development Toolkit            ║
 ║                     v0.1.0 POC                         ║
 ╚════════════════════════════════════════════════════════╝
 
@@ -743,7 +743,7 @@ Quick Start:
 Pre-loaded patterns: 41
 ```
 
-**Graceful failure:** If module load fails, session continues without AgentBricks (
+**Graceful failure:** If module load fails, session continues without AgentBlocks (
 warning logged to stderr).
 
 ## Token Efficiency Strategy
@@ -753,8 +753,8 @@ warning logged to stderr).
 **Solution: Just-In-Time Discovery**
 
 - MCP tool schemas: ~1400 tokens (pwsh, stdin, list_sessions only)
-- Base/AgentBricks functions: 0 tokens upfront (not in schemas)
-- Agents discover via `Get-Command -Module Base` or `Get-Command -Module AgentBricks`
+- AgentBlocks functions: 0 tokens upfront (not in schemas)
+- Agents discover via `Get-Command -Module AgentBlocks`
 - Full help via `Get-Help <function> -Full` (on-demand)
 - Pre-configured patterns: Loaded but not in tool descriptions
 
@@ -812,7 +812,7 @@ Watch-Command -Command "npm test" -Interval 30s -Alert "error"
 
 ## Integration with Invoke-DevRun Workflow
 
-AgentBricks complements the Invoke-DevRun function (Base module):
+AgentBlocks complements the Invoke-DevRun function (Base module):
 
 **Invoke-DevRun responsibilities:**
 
@@ -822,7 +822,7 @@ AgentBricks complements the Invoke-DevRun function (Base module):
 - Generate condensed summary (error/warning counts)
 - Set environment variables (`$env:name_stdout`, `$env:name_stderr`)
 
-**AgentBricks responsibilities:**
+**AgentBlocks responsibilities:**
 
 - Parse outputs with patterns (Select-RegexMatch)
 - Aggregate and count (Measure-Frequency)
@@ -836,7 +836,7 @@ AgentBricks complements the Invoke-DevRun function (Base module):
 dev-run "dotnet build" -name "build"
 # Returns: 42 errors (5 unique), top errors listed
 
-# Step 2: Deep dive with AgentBricks
+# Step 2: Deep dive with AgentBlocks
 $env:build_stderr | Select-RegexMatch -Pattern (Get-Patterns -Name "MSBuild").Pattern |
     Where-Object { $_.Severity -eq "error" } |
     Group-By Code |
