@@ -103,6 +103,26 @@ if (Test-Path $coreSource) {
     }
 }
 
+# Sync lib root files (errors.js, etc. - excluding index.js which needs manual merge)
+Write-Host "Syncing lib root files..." -ForegroundColor Green
+$libDest = Join-Path $destRoot "lib"
+
+Get-ChildItem $sourceLib -Filter "*.js" | Where-Object { $_.Name -ne "index.js" } | ForEach-Object {
+    $destFile = Join-Path $libDest $_.Name
+    $sourceHash = (Get-FileHash $_.FullName -Algorithm MD5).Hash
+    $destHash = if (Test-Path $destFile) { (Get-FileHash $destFile -Algorithm MD5).Hash } else { "" }
+
+    if ($sourceHash -ne $destHash) {
+        if (-not $DryRun) {
+            Copy-Item $_.FullName $destFile -Force
+        }
+        $synced += "lib/$($_.Name)"
+        Write-Host "  + $($_.Name)" -ForegroundColor Green
+    } else {
+        $skipped += "lib/$($_.Name)"
+    }
+}
+
 # Sync filters
 Write-Host "Syncing filters..." -ForegroundColor Green
 $filtersSource = Join-Path $sourceLib "filters"
