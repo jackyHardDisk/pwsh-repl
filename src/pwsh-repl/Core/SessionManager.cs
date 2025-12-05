@@ -796,6 +796,14 @@ if (-not $global:DevRunCacheCounter) {
         try
         {
             process.Start();
+
+            // Assign process to session's Job Object for automatic cleanup
+            // All child processes will inherit Job membership
+            if (session.JobHandle != IntPtr.Zero)
+            {
+                NativeMethods.AssignProcessToJobObject(session.JobHandle, process.Handle);
+            }
+
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 

@@ -196,11 +196,18 @@ if (-not $global:DevRunCache.ContainsKey('{name}')) {{
             }
             else
             {
-                // Timeout occurred
+                // Timeout occurred - stop PowerShell pipeline
                 session.PowerShell.Stop();
+
+                // Terminate all processes in the session's Job Object
+                // This atomically kills all child processes (and their descendants)
+                // No race conditions, no broken chains, session-isolated
+                session.TerminateJobProcesses();
+
                 return
                     $"Error: Script execution timeout after {timeoutSeconds} seconds.\n" +
-                    $"The script was terminated. Consider increasing the timeout parameter or optimizing the script.";
+                    $"The script and all child processes were terminated.\n" +
+                    $"Consider increasing the timeout parameter or optimizing the script.";
             }
         }
         catch (Exception ex)
