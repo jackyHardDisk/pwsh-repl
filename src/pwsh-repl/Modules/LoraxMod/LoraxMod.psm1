@@ -632,12 +632,10 @@ function Invoke-LoraxStreamQuery {
             $process.StandardInput.WriteLine($cmdJson)
             $process.StandardInput.BaseStream.Flush()
 
-            # Read response with timeout using synchronous read wrapped in Task
-            # This avoids stream collision issues with ReadLineAsync() in rapid loops
-            $reader = $process.StandardOutput
-            $readTask = [System.Threading.Tasks.Task]::Run([Func[string]]{
-                $reader.ReadLine()
-            })
+            # Read response with timeout using .NET async method directly
+            # Note: Using ReadLineAsync() instead of Task.Run with scriptblock
+            # because threadpool threads don't have PowerShell runspaces
+            $readTask = $process.StandardOutput.ReadLineAsync()
             $timeout = New-TimeSpan -Seconds $TimeoutSeconds
 
             if ($readTask.Wait($timeout)) {
@@ -738,11 +736,8 @@ function Stop-LoraxStreamParser {
             $process.StandardInput.WriteLine($shutdownCmd)
             $process.StandardInput.BaseStream.Flush()
 
-            # Try to read shutdown response using synchronous read wrapped in Task
-            $reader = $process.StandardOutput
-            $readTask = [System.Threading.Tasks.Task]::Run([Func[string]]{
-                $reader.ReadLine()
-            })
+            # Try to read shutdown response using .NET async method directly
+            $readTask = $process.StandardOutput.ReadLineAsync()
             $timeout = New-TimeSpan -Seconds $TimeoutSeconds
 
             $finalStats = $null
@@ -1345,11 +1340,8 @@ function Send-REPLCommand {
         $process.StandardInput.WriteLine($Command)
         $process.StandardInput.BaseStream.Flush()
 
-        # Read response with timeout using synchronous read wrapped in Task
-        $reader = $process.StandardOutput
-        $readTask = [System.Threading.Tasks.Task]::Run([Func[string]]{
-            $reader.ReadLine()
-        })
+        # Read response with timeout using .NET async method directly
+        $readTask = $process.StandardOutput.ReadLineAsync()
         $timeout = New-TimeSpan -Seconds $TimeoutSeconds
 
         if ($readTask.Wait($timeout)) {
