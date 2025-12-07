@@ -135,6 +135,25 @@ pwsh("$myVar", "session2")
 pwsh("Get-Process | Where-Object { $_.CPU -gt 100 } | Select-Object -First 5", "default")
 ```
 
+**Running Python Scripts - Here-String Pattern:**
+
+PowerShell parses `{braces}` as scriptblocks. Python f-strings like `{var.attr}` will cause errors.
+
+```powershell
+# BAD - fails with "ScriptBlock should only be specified..."
+python -c "print(f'{arr.shape}')"
+
+# GOOD - here-string preserves braces literally
+$code = @'
+import numpy as np
+arr = np.array([1,2,3])
+print(f"Shape: {arr.shape}")
+'@
+$code | python -
+```
+
+> **Tip:** Add this pattern to your project or user `CLAUDE.md` to ensure Claude uses it automatically.
+
 ### stdio - Background Process & Stdin Control
 
 **Purpose:** Interact with C#-managed background processes or session stdin pipes
