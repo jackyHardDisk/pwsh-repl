@@ -6,6 +6,7 @@ const { detectLanguage, getGrammarFile, getSupportedLanguages } = require('./cor
 const { traverseWithAncestors, findAncestor, isTopLevel, getParentClassName } = require('./core/traversal');
 const { TreeSitterExtractor, getCurrentContext, getDetectedSegments, resetSegments } = require('./extractors/base-extractor');
 const { matchesExtractionContext, applyExtractionContext } = require('./filters/extraction-context');
+const { ExtractorNotFoundError, UnknownLanguageError } = require('./errors');
 
 // Auto-register all language extractors
 require('./extractors/javascript');
@@ -18,8 +19,8 @@ require('./extractors/rust');
 require('./extractors/c');
 require('./extractors/cpp');
 require('./extractors/css');
-require('./extractors/html');
 require('./extractors/fortran');
+require('./extractors/html');
 
 /**
  * High-level API: Parse code and extract segments
@@ -31,6 +32,10 @@ require('./extractors/fortran');
  */
 async function parseCode(code, filePath, extractionContext = null, languageConfig = null) {
   const language = detectLanguage(filePath);
+
+  if (language === 'unknown') {
+    throw new UnknownLanguageError(filePath);
+  }
 
   // Initialize parser if needed
   await initParser();
@@ -83,15 +88,15 @@ function getExtractorClass(language) {
     csharp: require('./extractors/csharp').CSharpExtractor,
     rust: require('./extractors/rust').RustExtractor,
     c: require('./extractors/c').CExtractor,
-    cpp: require('./extractors/cpp').CPPExtractor,
+    cpp: require('./extractors/cpp').CppExtractor,
     css: require('./extractors/css').CSSExtractor,
-    html: require('./extractors/html').HTMLExtractor,
-    fortran: require('./extractors/fortran').FortranExtractor
+    fortran: require('./extractors/fortran').FortranExtractor,
+    html: require('./extractors/html').HTMLExtractor
   };
 
   const ExtractorClass = extractors[language];
   if (!ExtractorClass) {
-    throw new Error(`No extractor available for language: ${language}`);
+    throw new ExtractorNotFoundError(language);
   }
 
   return ExtractorClass;
