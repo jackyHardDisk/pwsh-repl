@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.IO.Pipes;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using Microsoft.PowerShell;
@@ -16,6 +15,12 @@ public class SessionManager : IDisposable
 {
     private readonly ConcurrentDictionary<string, PowerShellSession> _sessions = new();
     private readonly ConcurrentDictionary<string, DateTime> _sessionExpiry = new();
+    /// <summary>
+    ///     Lock for stdin handle operations. Required because SetStdHandle affects the entire
+    ///     process (not per-session). Without serialization, concurrent ExecuteScript calls
+    ///     would corrupt each other's save/restore sequence, potentially leaving stdin as NUL.
+    ///     ConcurrentDictionary doesn't help here - sessions are independent, but stdin is shared.
+    /// </summary>
     private readonly object _stdinHandleLock = new();
     private readonly object _auditLogLock = new();
     private readonly string? _auditLogPath;
@@ -24,7 +29,7 @@ public class SessionManager : IDisposable
 
     public SessionManager()
     {
-        Console.Error.WriteLine("SessionManager: Per-session stdin pipes enabled");
+        Console.Error.WriteLine("SessionManager: EOF pipe stdin enabled (inheritable handle with immediate EOF)");
 
         // Check for audit logging (opt-in via environment variable)
         _auditLogPath = Environment.GetEnvironmentVariable("PWSH_MCP_AUDIT_LOG");
@@ -144,17 +149,23 @@ public class SessionManager : IDisposable
         var pwsh = PowerShell.Create();
         pwsh.Runspace = runspace;
 
-        // Create stdin pipe BEFORE any child processes are spawned (environment activation, module loading)
-        // Without this, conda/python calls during ActivateEnvironment hang waiting for stdin
-        AnonymousPipeServerStream? stdinPipe = null;
+        // Set stdin to EOF pipe BEFORE any child processes are spawned (environment activation, module loading)
+        // EOF pipe = anonymous pipe with write-end closed. Provides:
+        // 1. Valid, inheritable handle (child processes can spawn and inherit)
+        // 2. Immediate EOF on read (no blocking when tools accidentally read stdin)
+        // This prevents conda/python hangs during ActivateEnvironment
         IntPtr originalStdin = IntPtr.Zero;
+        IntPtr eofPipeHandle = IntPtr.Zero;
 
         if (OperatingSystem.IsWindows())
         {
-            stdinPipe = new AnonymousPipeServerStream(PipeDirection.Out, HandleInheritability.Inheritable);
-            originalStdin = NativeMethods.GetStdHandle(NativeMethods.STD_INPUT_HANDLE);
-            NativeMethods.SetStdHandle(NativeMethods.STD_INPUT_HANDLE,
-                stdinPipe.ClientSafePipeHandle.DangerousGetHandle());
+            eofPipeHandle = NativeMethods.CreateEofPipe();
+
+            if (eofPipeHandle != IntPtr.Zero)
+            {
+                originalStdin = NativeMethods.GetStdHandle(NativeMethods.STD_INPUT_HANDLE);
+                NativeMethods.SetStdHandle(NativeMethods.STD_INPUT_HANDLE, eofPipeHandle);
+            }
         }
 
         try
@@ -182,14 +193,17 @@ if (-not $global:DevRunCacheCounter) {
             pwsh.Commands.Clear();
             pwsh.Streams.ClearStreams();
 
-            return new PowerShellSession(pwsh, runspace, stdinPipe);
+            return new PowerShellSession(pwsh, runspace);
         }
         finally
         {
-            // Restore original stdin handle
-            if (OperatingSystem.IsWindows() && originalStdin != IntPtr.Zero)
+            // Restore original stdin handle and close EOF pipe handle
+            if (OperatingSystem.IsWindows())
             {
-                NativeMethods.SetStdHandle(NativeMethods.STD_INPUT_HANDLE, originalStdin);
+                if (originalStdin != IntPtr.Zero)
+                    NativeMethods.SetStdHandle(NativeMethods.STD_INPUT_HANDLE, originalStdin);
+                if (eofPipeHandle != IntPtr.Zero)
+                    NativeMethods.CloseHandle(eofPipeHandle);
             }
         }
     }
@@ -467,8 +481,11 @@ if (-not $global:DevRunCacheCounter) {
     }
 
     /// <summary>
-    ///     Execute a script in a session with stdin handle swapping.
-    ///     This method is thread-safe and ensures the correct stdin handle is active during execution.
+    ///     Execute a script in a session with EOF pipe as stdin.
+    ///     EOF pipe = anonymous pipe with write-end closed. Provides:
+    ///     1. Valid, inheritable handle (subprocess.run capture_output works)
+    ///     2. Immediate EOF on read (no blocking when tools accidentally read stdin)
+    ///     This method is thread-safe.
     /// </summary>
     public Collection<PSObject> ExecuteScript(PowerShellSession session, string script, string? sessionId = null)
     {
@@ -483,15 +500,20 @@ if (-not $global:DevRunCacheCounter) {
         lock (_stdinHandleLock)
         {
             IntPtr originalStdin = IntPtr.Zero;
+            IntPtr eofPipeHandle = IntPtr.Zero;
 
             try
             {
-                // Windows-only: Save original stdin handle and swap to session-specific stdin
-                if (OperatingSystem.IsWindows() && session.StdinPipe != null)
+                // Windows-only: Set stdin to EOF pipe for immediate EOF on read
+                if (OperatingSystem.IsWindows())
                 {
-                    originalStdin = NativeMethods.GetStdHandle(NativeMethods.STD_INPUT_HANDLE);
-                    var sessionStdinHandle = session.StdinPipe.ClientSafePipeHandle.DangerousGetHandle();
-                    NativeMethods.SetStdHandle(NativeMethods.STD_INPUT_HANDLE, sessionStdinHandle);
+                    eofPipeHandle = NativeMethods.CreateEofPipe();
+
+                    if (eofPipeHandle != IntPtr.Zero)
+                    {
+                        originalStdin = NativeMethods.GetStdHandle(NativeMethods.STD_INPUT_HANDLE);
+                        NativeMethods.SetStdHandle(NativeMethods.STD_INPUT_HANDLE, eofPipeHandle);
+                    }
                 }
 
                 // Execute the script
@@ -510,97 +532,16 @@ if (-not $global:DevRunCacheCounter) {
             }
             finally
             {
-                // Windows-only: Restore original stdin handle
-                if (OperatingSystem.IsWindows() && originalStdin != IntPtr.Zero)
+                // Windows-only: Restore original stdin handle and close EOF pipe handle
+                if (OperatingSystem.IsWindows())
                 {
-                    NativeMethods.SetStdHandle(NativeMethods.STD_INPUT_HANDLE, originalStdin);
+                    if (originalStdin != IntPtr.Zero)
+                        NativeMethods.SetStdHandle(NativeMethods.STD_INPUT_HANDLE, originalStdin);
+                    if (eofPipeHandle != IntPtr.Zero)
+                        NativeMethods.CloseHandle(eofPipeHandle);
                 }
             }
         }
-    }
-
-    /// <summary>
-    ///     Write data to a session-specific stdin pipe.
-    /// </summary>
-    public void WriteToSessionStdin(string sessionId, string data)
-    {
-        if (_disposed)
-            throw new ObjectDisposedException(nameof(SessionManager));
-
-        if (!_sessions.TryGetValue(sessionId, out var session))
-            throw new InvalidOperationException($"Session '{sessionId}' does not exist");
-
-        if (session.StdinPipe == null)
-            throw new ObjectDisposedException($"Session '{sessionId}' stdin pipe has been closed");
-
-        try
-        {
-            using var writer = new StreamWriter(session.StdinPipe, leaveOpen: true)
-            {
-                AutoFlush = true
-            };
-
-            // Write data - it will be buffered in the pipe until a child process reads it
-            writer.Write(data);
-            writer.Flush();
-
-            Console.Error.WriteLine($"SessionManager: Wrote {data.Length} characters to session '{sessionId}' stdin (buffered)");
-        }
-        catch (IOException ex) when (ex.Message.Contains("pipe"))
-        {
-            // Pipe error - likely no reader or pipe is broken
-            Console.Error.WriteLine($"SessionManager: Pipe error writing to session '{sessionId}': {ex.Message}");
-            throw new InvalidOperationException($"Cannot write to stdin pipe for session '{sessionId}': {ex.Message}", ex);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"SessionManager: Failed to write to session '{sessionId}' stdin: {ex.Message}");
-            throw;
-        }
-    }
-
-    /// <summary>
-    ///     Write data to the stdin pipe (legacy global method - deprecated).
-    /// </summary>
-    [Obsolete("Use WriteToSessionStdin instead")]
-    public void WriteToStdin(string data)
-    {
-        // Legacy method - writes to default session for backwards compatibility
-        WriteToSessionStdin("default", data);
-    }
-
-    /// <summary>
-    ///     Close the stdin pipe for a specific session to signal EOF.
-    /// </summary>
-    public void CloseSessionStdin(string sessionId)
-    {
-        if (_disposed)
-            throw new ObjectDisposedException(nameof(SessionManager));
-
-        if (!_sessions.TryGetValue(sessionId, out var session))
-            throw new InvalidOperationException($"Session '{sessionId}' does not exist");
-
-        try
-        {
-            session.StdinPipe?.Dispose();
-            session.StdinPipe = null;
-            Console.Error.WriteLine($"SessionManager: Stdin closed for session '{sessionId}'");
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"SessionManager: Failed to close stdin for session '{sessionId}': {ex.Message}");
-            throw;
-        }
-    }
-
-    /// <summary>
-    ///     Close the stdin pipe write end to signal EOF (legacy global method - deprecated).
-    /// </summary>
-    [Obsolete("Use CloseSessionStdin instead")]
-    public void CloseStdin()
-    {
-        // Legacy method - closes default session stdin for backwards compatibility
-        CloseSessionStdin("default");
     }
 
     /// <summary>
@@ -617,14 +558,13 @@ if (-not $global:DevRunCacheCounter) {
     public SessionHealthInfo GetSessionHealth(string sessionId)
     {
         if (!_sessions.TryGetValue(sessionId, out var session))
-            return new SessionHealthInfo(sessionId, false, "NotFound", "NotFound", 0, false, false);
+            return new SessionHealthInfo(sessionId, false, "NotFound", "NotFound", 0, false);
 
         try
         {
             var runspaceState = session.Runspace?.RunspaceStateInfo.State.ToString() ?? "Disposed";
             var invocationState = session.PowerShell?.InvocationStateInfo.State.ToString() ?? "Disposed";
             var errorCount = session.PowerShell?.Streams.Error.Count ?? -1;
-            var stdinAvailable = session.StdinPipe != null;
 
             // Determine if healthy
             var isHealthy = runspaceState == "Opened" &&
@@ -640,12 +580,11 @@ if (-not $global:DevRunCacheCounter) {
                 runspaceState,
                 invocationState,
                 errorCount,
-                stdinAvailable,
                 isRecoverable);
         }
         catch (Exception ex)
         {
-            return new SessionHealthInfo(sessionId, false, "Error", ex.Message, -1, false, false);
+            return new SessionHealthInfo(sessionId, false, "Error", ex.Message, -1, false);
         }
     }
 
@@ -1042,5 +981,4 @@ public record SessionHealthInfo(
     string RunspaceState,
     string InvocationState,
     int ErrorCount,
-    bool StdinAvailable,
     bool IsRecoverable);

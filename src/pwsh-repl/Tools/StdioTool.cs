@@ -16,43 +16,25 @@ public class StdioTool
     }
 
     [McpServerTool]
-    [Description("Interact with background process stdio or session stdin pipe")]
+    [Description("Interact with background process stdio (write stdin, read stdout/stderr, close stdin, stop process)")]
     public string Stdio(
-        [Description("Background process name. If provided, interacts with that process. If omitted, writes to session stdin pipe.")]
-        string? name = null,
+        [Description("Background process name (required)")]
+        string name,
         [Description("Data to write to stdin (optional)")]
         string? data = null,
         [Description("Close stdin to signal EOF")]
         bool close = false,
         [Description("Stop/kill the background process and populate DevRun cache for Get-BackgroundData")]
         bool stop = false,
-        [Description("Read and return stdout/stderr output (only for background processes, default: true)")]
+        [Description("Read and return stdout/stderr output (default: true)")]
         bool readOutput = true,
         [Description("Session ID (default: 'default')")]
         string sessionId = "default")
     {
-        // If background process name specified, interact with that process
-        if (!string.IsNullOrEmpty(name))
-        {
-            return HandleBackgroundProcess(sessionId, name, data, close, stop, readOutput);
-        }
+        if (string.IsNullOrEmpty(name))
+            return "Error: Background process name is required";
 
-        // Otherwise, write to session stdin pipe (legacy behavior)
-        _sessionManager.GetOrCreateSession(sessionId);
-
-        if (close)
-        {
-            _sessionManager.CloseSessionStdin(sessionId);
-            return $"Closed session '{sessionId}' stdin pipe (EOF signaled)";
-        }
-
-        if (!string.IsNullOrEmpty(data))
-        {
-            _sessionManager.WriteToSessionStdin(sessionId, data);
-            return $"Wrote {data.Length} chars to session '{sessionId}' stdin pipe";
-        }
-
-        return "No action (specify name for background process, or data/close for session stdin)";
+        return HandleBackgroundProcess(sessionId, name, data, close, stop, readOutput);
     }
 
     /// <summary>
