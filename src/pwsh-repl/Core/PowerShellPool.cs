@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.IO.Pipes;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using System.Runtime.InteropServices;
@@ -126,31 +125,17 @@ public class PowerShellPool : IDisposable
 public class PowerShellSession : IDisposable
 {
     public PowerShellSession(PowerShell powerShell, Runspace runspace)
-        : this(powerShell, runspace, null)
-    {
-    }
-
-    public PowerShellSession(PowerShell powerShell, Runspace runspace, AnonymousPipeServerStream? stdinPipe)
     {
         PowerShell = powerShell ?? throw new ArgumentNullException(nameof(powerShell));
         Runspace = runspace ?? throw new ArgumentNullException(nameof(runspace));
 
-        // Use provided stdin pipe or create new one
-        // Pipe must exist BEFORE any child processes are spawned to prevent stdin hangs
-        StdinPipe = stdinPipe ?? new AnonymousPipeServerStream(PipeDirection.Out, HandleInheritability.Inheritable);
-
         // Create Job Object for this session - all child processes will be assigned to it
         // When session disposes, closing the Job kills all processes atomically
         JobHandle = NativeMethods.CreateKillOnCloseJob($"PwshSession_{Guid.NewGuid():N}");
-
-        // Note: We keep the client handle open so writes don't fail with "broken pipe"
-        // Child processes will inherit a copy of the handle when they spawn
-        // StdinPipe.DisposeLocalCopyOfClientHandle();
     }
 
     public PowerShell PowerShell { get; }
     public Runspace Runspace { get; }
-    public AnonymousPipeServerStream? StdinPipe { get; set; }
 
     /// <summary>
     ///     Job Object handle for this session. All spawned processes are assigned to this Job.
@@ -184,17 +169,7 @@ public class PowerShellSession : IDisposable
         // Clear background process tracking (processes already killed by Job closure)
         BackgroundProcesses.Clear();
 
-        // Dispose in order: StdinPipe, Runspace, PowerShell
-        try
-        {
-            StdinPipe?.Dispose();
-            StdinPipe = null;
-        }
-        catch
-        {
-            // Suppress disposal errors
-        }
-
+        // Dispose Runspace and PowerShell
         try
         {
             Runspace?.Close();
@@ -392,6 +367,49 @@ internal static class NativeMethods
 
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern bool SetStdHandle(int nStdHandle, IntPtr hHandle);
+
+    /// <summary>
+    ///     Creates an anonymous pipe. Used for stdin redirection with immediate EOF.
+    ///     By closing the write end immediately after creation, reads return EOF
+    ///     without blocking. The handle is inheritable so child processes work correctly.
+    /// </summary>
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern bool CreatePipe(
+        out IntPtr hReadPipe,
+        out IntPtr hWritePipe,
+        ref SECURITY_ATTRIBUTES lpPipeAttributes,
+        uint nSize);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SECURITY_ATTRIBUTES
+    {
+        public int nLength;
+        public IntPtr lpSecurityDescriptor;
+        public bool bInheritHandle;
+    }
+
+    /// <summary>
+    ///     Creates an anonymous pipe with write-end closed for immediate EOF stdin.
+    ///     Returns the read handle (valid, inheritable) or IntPtr.Zero on failure.
+    /// </summary>
+    public static IntPtr CreateEofPipe()
+    {
+        var sa = new SECURITY_ATTRIBUTES
+        {
+            nLength = Marshal.SizeOf<SECURITY_ATTRIBUTES>(),
+            lpSecurityDescriptor = IntPtr.Zero,
+            bInheritHandle = true  // Critical: child processes must inherit this handle
+        };
+
+        if (CreatePipe(out var readHandle, out var writeHandle, ref sa, 0))
+        {
+            // Close write end immediately - any read on readHandle returns EOF
+            CloseHandle(writeHandle);
+            return readHandle;
+        }
+
+        return IntPtr.Zero;
+    }
 
     // Process tree enumeration APIs for kill-on-timeout
     private const uint TH32CS_SNAPPROCESS = 0x00000002;

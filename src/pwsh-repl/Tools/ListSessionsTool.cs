@@ -75,7 +75,6 @@ public class ListSessionsTool
                 sb.AppendLine($"    Runspace: {health.RunspaceState}");
                 sb.AppendLine($"    Invocation: {health.InvocationState}");
                 sb.AppendLine($"    Errors: {health.ErrorCount}");
-                sb.AppendLine($"    Stdin: {(health.StdinAvailable ? "available" : "closed")}");
                 if (!health.IsHealthy)
                     sb.AppendLine($"    Recoverable: {health.IsRecoverable}");
             }
