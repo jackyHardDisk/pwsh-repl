@@ -12,11 +12,6 @@
         <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
         <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     </PropertyGroup>
-
-    <ItemGroup>
-        <Compile Remove="src\pwsh-repl\Modules\LoraxMod\**\*.cs"/>
-    </ItemGroup>
-
     <ItemGroup>
         <PackageReference Include="ModelContextProtocol" Version="0.4.0-preview.3"/>
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0"/>
@@ -48,37 +43,11 @@
               SkipUnchangedFiles="true"/>
     </Target>
 
-    <Target Name="CopyLoraxModModule" AfterTargets="Build">
-        <ItemGroup>
-            <LoraxModFiles Include="src\pwsh-repl\Modules\LoraxMod\**\*.*"/>
-        </ItemGroup>
-        <Copy SourceFiles="@(LoraxModFiles)"
-              DestinationFolder="$(OutDir)Modules\LoraxMod\%(RecursiveDir)"
-              SkipUnchangedFiles="true"/>
-    </Target>
-
-    <Target Name="CopyTokenCounterModule" AfterTargets="Build">
+        <Target Name="CopyTokenCounterModule" AfterTargets="Build">
         <ItemGroup>
             <TokenCounterFiles Include="src\pwsh-repl\Modules\TokenCounter\**\*.*"/>
         </ItemGroup>
         <Copy SourceFiles="@(TokenCounterFiles)"
               DestinationFolder="$(OutDir)Modules\TokenCounter\%(RecursiveDir)"
               SkipUnchangedFiles="true"/>
-    </Target>
-
-    <PropertyGroup>
-        <LoraxModUpstream Condition="'$(LoraxModUpstream)' == ''">C:\Users\jacks\experiments\WebStormProjects\loraxMod</LoraxModUpstream>
-    </PropertyGroup>
-
-    <Target Name="PublishLoraxModUpstream" AfterTargets="Build" Condition="Exists('$(LoraxModUpstream)\powershellMod')">
-        <ItemGroup>
-            <LoraxModPowerShell Include="src\pwsh-repl\Modules\LoraxMod\LoraxMod.psm1"/>
-            <LoraxModPowerShell Include="src\pwsh-repl\Modules\LoraxMod\LoraxMod.psd1"/>
-        </ItemGroup>
-        <Copy SourceFiles="@(LoraxModPowerShell)"
-              DestinationFolder="$(LoraxModUpstream)\powershellMod"
-              SkipUnchangedFiles="true"/>
-        <Message Text="Published LoraxMod PowerShell module to upstream" Importance="high"/>
-    </Target>
-
-</Project>
+    </Target></Project>
