@@ -24,13 +24,6 @@ public static class ToolDescriptions
   $code | python -
 ## Quick Reference
 
-**LoraxMod** - Tree-sitter AST parsing (12 languages)
-  Start-LoraxStreamParser [-SessionId] [-ParserScript] [-TimeoutSeconds]
-  Invoke-LoraxStreamQuery [-SessionId] [-Command] [-FilePath] [-Query] [-Context]
-  Stop-LoraxStreamParser [-SessionId] [-TimeoutSeconds]
-  Find-FunctionCalls -Language [-Code] [-FilePath] [-FunctionNames]
-  (+5 more: Get-Command -Module LoraxMod)
-
 **AgentBlocks** - Pattern learning (43 pre-configured patterns)
   Get-Patterns [-Name] [-Category]
   Set-Pattern -Name -Pattern -Description [-Category]

@@ -73,6 +73,8 @@ Copy `.mcp.json.example` to `.mcp.json` and update paths, or add to `~/.claude/s
     "pwsh-repl": {
       "type": "stdio",
       "command": "C:\\path\\to\\PowerShellMcpServer.exe",
+      "args": [],
+      "cwd": ".",
       "env": {
         "PWSH_MCP_TIMEOUT_DEFAULT": "60"
       }
@@ -80,6 +82,10 @@ Copy `.mcp.json.example` to `.mcp.json` and update paths, or add to `~/.claude/s
   }
 }
 ```
+
+**Important:** The `"cwd": "."` field sets the server's working directory to the project root.
+This ensures PowerShell scripts using relative paths (like `.gary/scripts/`) resolve correctly.
+Each project's `.mcp.json` should include this field.
 
 ### Test
 
