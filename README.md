@@ -37,6 +37,13 @@ Code with auto-loading AgentBlocks module.
 - Accurate Claude token counting using tiktoken
 - Measure-Tokens function for text/file analysis
 
+**LoraxMod Module (Optional)**
+
+- External tree-sitter AST parsing module (28 languages)
+- 10 cmdlets for code analysis and semantic diff
+- Load via PWSH_MCP_MODULES environment variable
+- Native C# implementation (TreeSitter.DotNet)
+
 **Token Efficiency**
 
 - Tool schemas: ~1,400 tokens (3 tools)
@@ -77,6 +84,28 @@ Copy `.mcp.json.example` to `.mcp.json` and update paths, or add to `~/.claude/s
 **Important:** The `"cwd": "."` field sets the server's working directory to the project root.
 This ensures PowerShell scripts using relative paths (like `.gary/scripts/`) resolve correctly.
 Each project's `.mcp.json` should include this field.
+
+**Loading External Modules:**
+
+To load additional PowerShell modules (like LoraxMod), add `PWSH_MCP_MODULES` to the `env` section:
+
+```json
+{
+  "mcpServers": {
+    "pwsh-repl": {
+      "env": {
+        "PWSH_MCP_MODULES": "C:\\path\\to\\module1.psd1;C:\\path\\to\\module2.psd1"
+      }
+    }
+  }
+}
+```
+
+Notes:
+- Use absolute paths (required for MCP server context)
+- Multiple modules: semicolon-delimited
+- Modules auto-load on session creation
+- Built-in modules (AgentBlocks, TokenCounter) always load automatically
 
 ### Test
 
