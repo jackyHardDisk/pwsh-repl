@@ -29,6 +29,7 @@ build.log
 # Local settings
 .claude/settings.local.json
 .mcp.json
+CLAUDE.md
 
 # Personal task management
 .gary/
