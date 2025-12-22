@@ -10,7 +10,8 @@ public static class ToolDescriptions
 {
     public const string PwshToolDescription = @"Execute PowerShell with persistent sessions. Variables and state persist across calls within the same sessionId.
 
-**Modules auto-loaded:** Base, AgentBlocks, LoraxMod, SessionLog, TokenCounter (from PWSH_MCP_MODULES)
+**Modules auto-loaded:** Base, AgentBlocks, TokenCounter + PWSH_MCP_MODULES (e.g., LoraxMod, SessionLog)
+**Check loaded modules:** Use pwsh_mcp://modules resource
 
 **Mode callback pattern:** Use mode parameter to call module functions directly:
   mode='Invoke-DevRun' + script='dotnet build' + kwargs={Streams: ['Error']}
