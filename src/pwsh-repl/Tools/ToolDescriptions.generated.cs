@@ -39,6 +39,16 @@ public static class ToolDescriptions
   Show-Session [-Last] | Read-SessionLog [-Last]
   (External module via PWSH_MCP_MODULES)
 
+**LoraxMod** - Tree-sitter AST parsing v1.0.1 (28 languages, experimental)
+  # Parse code to AST
+  ConvertTo-LoraxAST -Code $code -Language python [-Recurse]
+  # Semantic diff (structure-aware, not text)
+  Compare-LoraxAST -OldCode $old -NewCode $new -Language csharp
+  # Dead code pattern: find defined vs called
+  $funcs = Find-LoraxFunction -Language python -FilePath $file
+  $calls = Find-LoraxNode -Language python -FilePath $file -NodeTypes @('call')
+  (External module via PWSH_MCP_MODULES)
+
 Use Get-Help <function> -Full for detailed documentation.
 ";
 }
