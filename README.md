@@ -36,13 +36,13 @@ Code with auto-loading AgentBlocks module.
 - Todo management (Add-Todo, Update-TodoStatus)
 - Session history (Show-Session, Read-SessionLog)
 
-**LoraxMod Module (Optional, External)**
+**LoraxMod Module (Bundled)**
 
 - Tree-sitter AST parsing for 28 languages
 - 10 cmdlets: `ConvertTo-LoraxAST`, `Compare-LoraxAST`, `Find-LoraxFunction`, etc.
 - Semantic diff, function extraction, dependency analysis
 - Native C# via [TreeSitter.DotNet](https://www.nuget.org/packages/TreeSitter.DotNet)
-- **Not bundled** (50MB+ native DLLs) - load via `PWSH_MCP_MODULES`
+- Source: [jackyHardDisk/loraxMod](https://github.com/jackyHardDisk/loraxMod)
 
 **Token Efficiency**
 
@@ -111,7 +111,7 @@ Notes:
 - Use absolute paths (required for MCP server context)
 - Multiple modules: semicolon-delimited
 - Modules auto-load on session creation
-- Built-in modules (AgentBlocks) load automatically
+- Built-in modules (AgentBlocks, LoraxMod) load automatically
 
 ### Test
 
