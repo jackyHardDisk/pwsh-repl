@@ -33,9 +33,6 @@ jobs:
       - name: Build
         run: dotnet build --configuration Release -p:Version=${{ steps.version.outputs.VERSION }}
 
-      - name: Pack NuGet
-        run: dotnet pack --configuration Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkg
-
       - name: Create release archive
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
@@ -46,10 +43,5 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            pwsh-repl-*.zip
-            nupkg/*.nupkg
+          files: pwsh-repl-*.zip
           generate_release_notes: true
-
-      - name: Push to NuGet
-        run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

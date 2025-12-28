@@ -34,6 +34,9 @@ CLAUDE.md
 # Personal task management
 .gary/
 
+# Drafts (local work in progress)
+drafts/
+
 # Development data and test artifacts
 data/
 test/

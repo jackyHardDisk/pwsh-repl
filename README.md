@@ -52,11 +52,9 @@ Code with auto-loading AgentBlocks module.
 
 ## Installation
 
-### Option 1: NuGet (Recommended)
+### Option 1: Download Release
 
-```bash
-dotnet tool install -g pwsh-repl
-```
+Download the latest `pwsh-repl-vX.X.X-win-x64.zip` from [GitHub Releases](https://github.com/jackyHardDisk/pwsh-repl/releases).
 
 ### Option 2: Build from Source
 

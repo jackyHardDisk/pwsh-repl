@@ -20,16 +20,9 @@
         <RepositoryType>git</RepositoryType>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
-        <!-- NuGet dotnet tool configuration -->
-        <PackAsTool>true</PackAsTool>
-        <ToolCommandName>pwsh-repl</ToolCommandName>
-        <PackageId>pwsh-repl</PackageId>
-        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <!-- Note: PackAsTool not supported with net8.0-windows -->
+        <!-- Distribute via GitHub Releases (zip) instead -->
     </PropertyGroup>
-
-    <ItemGroup>
-        <None Include="README.md" Pack="true" PackagePath="\"/>
-    </ItemGroup>
 
     <ItemGroup>
         <PackageReference Include="ModelContextProtocol" Version="0.4.0-preview.3"/>
