@@ -33,6 +33,29 @@ jobs:
       - name: Build
         run: dotnet build --configuration Release -p:Version=${{ steps.version.outputs.VERSION }}
 
+      - name: Bundle LoraxMod module
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $modulesDir = "release/v$version/Modules/LoraxMod"
+
+          # Clone LoraxMod repo (shallow, just powershellMod folder)
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/jackyHardDisk/loraxMod.git temp-lorax
+          cd temp-lorax
+          git sparse-checkout set powershellMod
+          cd ..
+
+          # Copy PowerShell module to release
+          New-Item -ItemType Directory -Path $modulesDir -Force | Out-Null
+          Copy-Item -Path "temp-lorax/powershellMod/*" -Destination $modulesDir -Recurse
+
+          # Cleanup
+          Remove-Item -Path "temp-lorax" -Recurse -Force
+
+          # Verify
+          $files = Get-ChildItem $modulesDir -Recurse | Measure-Object
+          Write-Host "LoraxMod bundled: $($files.Count) files"
+        shell: pwsh
+
       - name: Create release archive
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
