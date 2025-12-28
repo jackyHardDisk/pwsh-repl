@@ -50,17 +50,25 @@ Code with auto-loading AgentBlocks module.
 - AgentBlocks functions: 0 tokens upfront (discovered on-demand)
 - Invoke-DevRun: Summarized output vs verbose raw streams
 
-## Quick Start
+## Installation
 
-### Build
+### Option 1: NuGet (Recommended)
 
 ```bash
+dotnet tool install -g pwsh-repl
+```
+
+### Option 2: Build from Source
+
+```bash
+git clone https://github.com/jackyHardDisk/pwsh-repl.git
+cd pwsh-repl
 dotnet build
 ```
 
 Output: `release/v0.1.0/PowerShellMcpServer.exe`
 
-### Configure
+## Configuration
 
 Copy `.mcp.json.example` to `.mcp.json` and update paths, or add to `~/.claude/settings.json`:
 
@@ -266,13 +274,12 @@ mcp__pwsh-repl__pwsh(script='Get-StreamData test Error | Select-RegexMatch -Patt
 #   1x: tests/test_db.py::test_query
 ```
 
-**Full documentation:** See [docs/AgentBlocks.md](docs/AgentBlocks.md)
+**Full documentation:** See [docs/AGENTBLOCKS.md](docs/AGENTBLOCKS.md)
 
 ## Documentation
 
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - Implementation details, build process, session management
-- [AgentBlocks.md](docs/AgentBlocks.md) - Complete AgentBlocks function reference with examples
-- [DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md) - Why key architectural choices were made
+- [AGENTBLOCKS.md](docs/AGENTBLOCKS.md) - Complete AgentBlocks function reference
+- [AGENTBLOCKS_EXAMPLES.md](docs/AGENTBLOCKS_EXAMPLES.md) - Usage examples and workflows
 
 ## Current Status
 
@@ -502,20 +509,6 @@ Log format:
 - .NET 8.0 SDK (for building only - not needed to run pre-built releases)
 - Windows x64 (PowerShell SDK dependency)
 - Claude Code with MCP support
-
-## Building from Source
-
-```bash
-git clone https://github.com/jacksonhunter/PowerShell-REPL-MCP-Server.git
-cd PowerShell-REPL-MCP-Server
-dotnet restore
-dotnet build
-```
-
-Build output: `release/v0.1.0/`
-- PowerShellMcpServer.exe
-- PowerShell SDK runtime libraries (auto-copied)
-- All modules (AgentBlocks, LoraxMod) auto-copied to Modules/
 
 ## Contributing
 

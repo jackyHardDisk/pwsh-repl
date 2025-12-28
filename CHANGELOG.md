@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2025-01-XX
+## [0.1.0] - 2025-12-27
 
 ### Added
 
@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Extract: `Select-RegexMatch`, `Select-TextBetween`, `Select-Column`
   - Analyze: `Find-Errors`, `Find-Warnings`, `Get-BuildError`
   - 43 pre-configured patterns (ESLint, Pytest, MSBuild, GCC, etc.)
-- **LoraxMod Module**: Tree-sitter AST parsing for 28 languages (bundled)
+- **LoraxMod Module**: Tree-sitter AST parsing for 28 languages (via NuGet)
 - **Mode Callback Pattern**: Call AgentBlocks functions via `mode` parameter
 - **Session Isolation**: Named sessions with independent variable scopes
 - **Background Execution**: Run long processes with `runInBackground=true`
@@ -29,7 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Infrastructure
 
 - MIT License
-- GitHub Actions release workflow
+- GitHub Actions release workflow with NuGet publishing
+- NuGet package: `dotnet tool install -g pwsh-repl`
 - Contributor Covenant Code of Conduct
 
 ## [Unreleased]
