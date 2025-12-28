@@ -47,10 +47,9 @@ Code with auto-loading AgentBlocks module.
 
 **Token Efficiency**
 
-- Tool schemas: ~1,400 tokens (3 tools)
-- Base module functions: 0 tokens upfront (discovered on-demand)
-- AgentBlocks functions: 0 tokens upfront (discovered on-demand)
-- Invoke-DevRun: Summarized output vs verbose raw streams
+- Tool schemas: ~4,000 tokens (4 tools)
+- Module functions: 0 tokens upfront (discovered on-demand via Get-Help)
+- Invoke-DevRun: 544 lines -> 5-line summary (99% reduction)
 
 ## Installation
 
