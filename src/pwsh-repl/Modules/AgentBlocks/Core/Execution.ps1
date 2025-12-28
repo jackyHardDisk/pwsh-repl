@@ -149,8 +149,9 @@ function Invoke-DevRun {
         $unique = ($items | Select-Object -Unique).Count
         $null = $summary.AppendLine("${streamName}s: $($items.Count.ToString().PadLeft(6))  ($unique unique)")
 
-        # Frequency analysis (top 5)
+        # Frequency analysis (top 5, filter blanks)
         $frequency = $items |
+            Where-Object { $_.Trim() } |
             Group-Object |
             Sort-Object Count -Descending |
             Select-Object -First 5 -Property Count, Name
