@@ -29,8 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Infrastructure
 
 - MIT License
-- GitHub Actions release workflow with NuGet publishing
-- NuGet package: `dotnet tool install -g pwsh-repl`
+- GitHub Actions release workflow
 - Contributor Covenant Code of Conduct
 
 ## [Unreleased]
