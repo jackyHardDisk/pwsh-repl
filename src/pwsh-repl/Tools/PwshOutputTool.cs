@@ -25,8 +25,13 @@ public class PwshOutputTool
     }
 
     [McpServerTool]
-    [Description(
-        "Retrieve output from background PowerShell process. Auto-finalizes to cached results when complete.")]
+    [Description(@"Retrieve output from background PowerShell process. Auto-finalizes to cached results when complete.
+
+**Usage pattern:**
+  pwsh(script='dotnet build', runInBackground=true, name='build')
+  pwsh_output(name='build')  # check progress, get new output
+  pwsh_output(name='build', filter='error')  # filter output by regex
+  # When complete: auto-caches to DevRun for Get-StreamData analysis")]
     public string PwshOutput(
         [Description("Name of the background process")]
         string name,
