@@ -19,7 +19,17 @@
         <RepositoryUrl>https://github.com/jackyHardDisk/pwsh-repl</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+        <!-- NuGet dotnet tool configuration -->
+        <PackAsTool>true</PackAsTool>
+        <ToolCommandName>pwsh-repl</ToolCommandName>
+        <PackageId>pwsh-repl</PackageId>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
 
     <ItemGroup>
         <PackageReference Include="ModelContextProtocol" Version="0.4.0-preview.3"/>

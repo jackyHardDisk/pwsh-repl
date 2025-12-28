@@ -34,9 +34,6 @@ CLAUDE.md
 # Personal task management
 .gary/
 
-# GitHub workflows and templates (internal)
-.github/
-
 # Development data and test artifacts
 data/
 test/
