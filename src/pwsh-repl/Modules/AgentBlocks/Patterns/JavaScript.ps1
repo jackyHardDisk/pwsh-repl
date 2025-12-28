@@ -2,9 +2,10 @@
 # Pre-configured patterns for common JS/TS development tools
 
 # ESLint - JavaScript/TypeScript linter
+# Format: file:line:col: severity: message [rule]
 Set-Pattern -Name "ESLint" `
-    -Pattern '(?<file>[\w/\\.-]+):(?<line>\d+):(?<col>\d+):\s*(?<severity>error|warning):\s*(?<message>.+?)\s+(?<rule>[\w/-]+)' `
-    -Description "ESLint output: file:line:col: severity: message rule" `
+    -Pattern '(?<file>[\w/\\.-]+):(?<line>\d+):(?<col>\d+):\s*(?<severity>error|warning):\s*(?<message>.+?)\s+\[(?<rule>[\w/-]+)\]$' `
+    -Description "ESLint output: file:line:col: severity: message [rule]" `
     -Category "lint"
 
 # Stylelint - CSS/SCSS linter

@@ -1,10 +1,17 @@
 # Git Patterns
 # Pre-configured patterns for Git version control output
 
-# Git Status - Modified/Deleted Files
+# Git Status Short Format (git status --short)
+# XY format: X=index, Y=worktree. M=modified, A=added, D=deleted, ?=untracked
 Set-Pattern -Name "Git-Status" `
+    -Pattern '^(?<index>[ MADRCU?!])(?<worktree>[ MADRCU?!])\s+(?<file>.+)$' `
+    -Description "Git status short: XY file (M=modified, A=added, D=deleted, ?=untracked)" `
+    -Category "info"
+
+# Git Status Verbose Format (git status without --short)
+Set-Pattern -Name "Git-StatusVerbose" `
     -Pattern '(?<status>modified|deleted|new file):\s+(?<file>[\w/\\.-]+)' `
-    -Description "Git status: modified/deleted/new file: filename" `
+    -Description "Git status verbose: modified/deleted/new file: filename" `
     -Category "info"
 
 # Git Conflict Markers

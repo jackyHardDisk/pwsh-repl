@@ -28,7 +28,7 @@ public static class ToolDescriptions
 
 ## Quick Reference
 
-**AgentBlocks** - Pattern learning (43 pre-configured patterns)
+**AgentBlocks** - Pattern learning (49 pre-configured patterns)
   Get-Patterns [-Name] [-Category]
   Set-Pattern -Name -Pattern -Description [-Category]
   Test-Pattern -Name [-Sample] [-ShowMatches]
