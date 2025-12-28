@@ -38,11 +38,8 @@ jobs:
           $version = "${{ steps.version.outputs.VERSION }}"
           $modulesDir = "release/v$version/Modules/LoraxMod"
 
-          # Clone LoraxMod repo (shallow, just powershellMod folder)
-          git clone --depth 1 --filter=blob:none --sparse https://github.com/jackyHardDisk/loraxMod.git temp-lorax
-          cd temp-lorax
-          git sparse-checkout set powershellMod
-          cd ..
+          # Shallow clone LoraxMod repo
+          git clone --depth 1 https://github.com/jackyHardDisk/loraxMod.git temp-lorax
 
           # Copy PowerShell module to release
           New-Item -ItemType Directory -Path $modulesDir -Force | Out-Null
