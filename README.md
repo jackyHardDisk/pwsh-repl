@@ -17,11 +17,12 @@ Code with auto-loading AgentBlocks module.
 - Session state survives across tool calls
 - Multiple independent sessions per MCP server instance
 
-**3 MCP Tools**
+**4 MCP Tools**
 
-- `stdio` - Interact with background processes or session stdin
 - `pwsh` - Execute PowerShell with session persistence and mode callbacks
-- `list_sessions` - List active PowerShell session IDs
+- `pwsh_output` - Monitor background process output with filtering
+- `stdio` - Interact with background processes (stdin/stdout/stop)
+- `list_sessions` - List/manage active PowerShell sessions
 
 **AgentBlocks Module**
 
@@ -67,7 +68,7 @@ cd pwsh-repl
 dotnet build
 ```
 
-Output: `release/v0.1.0/PowerShellMcpServer.exe`
+Output: `release/v{version}/PowerShellMcpServer.exe`
 
 **Note:** Building from source does not include LoraxMod. To add it, clone [loraxMod](https://github.com/jackyHardDisk/loraxMod) and configure via `PWSH_MCP_MODULES`.
 
@@ -134,24 +135,31 @@ Get-Command -Module AgentBlocks | Measure-Object
 
 **Parameters:**
 
-- `script` (required) - PowerShell script to execute
+- `script` (optional if mode provided) - PowerShell script to execute
+- `mode` (optional) - AgentBlocks function to call (e.g., 'Invoke-DevRun', 'Format-Count')
+- `name` (optional) - Cache name for results (auto-generated: pwsh_1, pwsh_2, etc.)
+- `kwargs` (optional) - Parameters for mode function as dictionary
 - `sessionId` (optional, default: "default") - Session ID for state isolation
+- `runInBackground` (optional, default: false) - Run in background, use stdio to interact
+- `timeoutSeconds` (optional, default: 60) - Execution timeout
+- `environment` (optional) - venv path or conda environment name
 
 **Features:**
 
 - Variables persist within session
-- Automatic Out-String formatting for tables
-- Returns stdout + errors + warnings
+- Mode callback pattern for AgentBlocks functions
+- Background execution with process tree management
+- Auto-caching in $global:DevRunCache
+- Environment activation (conda/venv)
 
 **Timeout Behavior:**
 
-When a script exceeds `timeoutSeconds`, the server:
-1. Stops the PowerShell pipeline
-2. Takes a snapshot of child processes spawned during execution
-3. Kills all new child processes (and their descendants) using Win32 APIs
-4. Returns an error message with the count of killed processes
+When a script exceeds `timeoutSeconds`, the server uses Windows Job Objects to:
+1. Stop the PowerShell pipeline
+2. Terminate the entire process tree atomically (no orphans)
+3. Return an error message with cleanup status
 
-This prevents orphaned processes from consuming resources (GPU memory, database connections, etc.).
+Job Objects ensure all child processes are killed together - no race conditions or orphaned processes.
 
 **Example:**
 
@@ -222,17 +230,52 @@ mcp__pwsh-repl__stdio(name='srv', stop=True, sessionId='dev')
 mcp__pwsh-repl__stdio(data='line1\nline2\n', sessionId='repl')
 ```
 
+### pwsh_output - Background Process Monitor
+
+**Purpose:** Retrieve and filter output from background processes
+
+**Parameters:**
+
+- `name` (required) - Background process name
+- `filter` (optional) - Regex pattern to filter output lines
+- `sessionId` (optional, default: "default") - Target session
+
+**Example:**
+
+```python
+# Start long-running build in background
+mcp__pwsh-repl__pwsh(script='dotnet build', runInBackground=True, name='build')
+
+# Check progress (non-blocking)
+mcp__pwsh-repl__pwsh_output(name='build')
+
+# Filter for errors only
+mcp__pwsh-repl__pwsh_output(name='build', filter='error')
+
+# When complete: auto-caches to DevRun for Get-StreamData analysis
+```
+
 ### list_sessions - List Active Sessions
 
-**Purpose:** Show all active PowerShell session IDs
+**Purpose:** Show all active PowerShell session IDs with health diagnostics
 
-**Parameters:** None
+**Parameters:**
+
+- `getSessionHealth` (optional) - Include runspace state and error counts
+- `killAllSessions` (optional) - Remove all sessions (they recreate on next use)
+- `killUnhealthy` (optional) - Remove only broken sessions
 
 **Example:**
 
 ```python
 mcp__pwsh-repl__list_sessions()
-# Returns: ['default', 'gary_pwsh_repl', 'build_session']
+# Returns: ['default', 'build_session', 'ssh']
+
+mcp__pwsh-repl__list_sessions(getSessionHealth=True)
+# Returns health info per session
+
+mcp__pwsh-repl__list_sessions(killUnhealthy=True)
+# Cleans up broken sessions
 ```
 
 ## AgentBlocks Module
@@ -289,8 +332,8 @@ mcp__pwsh-repl__pwsh(script='Get-StreamData test Error | Select-RegexMatch -Patt
 **Completed:**
 
 - Core MCP server with stdio protocol
-- 3 tools: pwsh (with mode callback), stdin, list_sessions
-- SessionManager with named sessions and stdin pipe architecture
+- 4 tools: pwsh, pwsh_output, stdio, list_sessions
+- SessionManager with named sessions and Job Object process management
 - Base module (39 functions), AgentBlocks (5 functions + 49 patterns)
 - SessionLog module (external via PWSH_MCP_MODULES)
 - Auto-loading modules on session creation
@@ -375,49 +418,62 @@ $buildLog | Select-RegexMatch -Pattern (Get-Patterns -Name MSBuild-Error).Patter
 #   1x: CS1061
 ```
 
-### Workflow 1: Build Error Analysis
+### Workflow 1: Invoke-DevRun with Auto-Summary
+
+Real example - run ESLint on a project, get auto-summarized output:
 
 ```powershell
-# Run build with Invoke-DevRun (mode callback)
-mcp__pwsh-repl__pwsh(
-    mode='Invoke-DevRun',
-    script='dotnet build',
-    name='build'
-)
+# Run lint with stream capture (544 lines -> 5-line summary)
+Invoke-DevRun -Script 'npm run lint' -Name lint -Streams @('Output','Error')
+
+# Output:
+# Script: npm run lint
+#
+# Outputs:    544  (523 unique)
+#
+# Top Outputs:
+#    2x: error  Parsing error: 'import' and 'export' may appear only...
+#    1x: warning  Async method 'process' has no 'await' expression
+#    1x: warning  Generic Object Injection Sink
+#    1x: error    Unexpected constant condition
+#
+# Stored: $global:DevRunCache['lint']
+
+# Drill down with Group-Similar
+Get-StreamData lint Output | Where-Object { $_ -match 'error' } | Group-Similar | Format-Count
+```
+
+### Workflow 2: Build Error Analysis
+
+```powershell
+# Run build with Invoke-DevRun
+Invoke-DevRun -Script 'dotnet build' -Name build -Streams @('Output','Error')
 
 # Analyze with Group-BuildErrors (regex + fuzzy hybrid)
-mcp__pwsh-repl__pwsh(script='Get-StreamData build Output | Group-BuildErrors | Format-Count')
+Get-StreamData build Output | Group-BuildErrors | Format-Count
 
 # Deep dive with pattern matching
-mcp__pwsh-repl__pwsh(script='''
 Get-StreamData build Output |
     Select-RegexMatch -Pattern (Get-Patterns -Name MSBuild-Error).Pattern |
     Where-Object { $_.Code -eq "CS0103" }
-''')
 ```
 
-### Workflow 2: Test Suite Analysis
+### Workflow 3: Test Suite Analysis
 
 ```powershell
 # Discover test command
-mcp__pwsh-repl__pwsh(script='Find-ProjectTools')
+Find-ProjectTools
 
 # Run tests with Invoke-DevRun
-mcp__pwsh-repl__pwsh(
-    mode='Invoke-DevRun',
-    script='npm run test',
-    name='test'
-)
+Invoke-DevRun -Script 'npm run test' -Name test -Streams @('Output','Error')
 
 # Extract failures with pattern
-mcp__pwsh-repl__pwsh(script='''
 Get-StreamData test Output |
     Select-RegexMatch -Pattern (Get-Patterns -Name Jest-Error).Pattern |
     Format-Count
-''')
 ```
 
-### Workflow 3: Learn Custom Tool
+### Workflow 4: Learn Custom Tool
 
 ```powershell
 # Register custom pattern
@@ -431,7 +487,7 @@ $logs | Select-RegexMatch -Pattern (Get-Patterns -Name myapp-error).Pattern |
     Group-By component | Format-Count
 ```
 
-### Workflow 4: Interactive SSH Session
+### Workflow 5: Interactive SSH Session
 
 Use `runInBackground` + `stdio` for interactive remote sessions. This pattern enables
 sending multiple commands to a persistent SSH connection without blocking.
@@ -549,7 +605,7 @@ mcp__pwsh-repl__stdio(name='remote', stop=True, sessionId='ssh')
 
 Log format:
 ```
-[2024-01-15 14:32:01.123] EXECUTE session=default content="Get-Process | Select -First 5"
+[2025-01-15 14:32:01.123] EXECUTE session=default content="Get-Process | Select -First 5"
 ```
 
 ## Requirements
