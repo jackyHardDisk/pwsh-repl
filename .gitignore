@@ -49,10 +49,14 @@ test/
 *.internal
 
 # Development scripts (not part of distribution)
+scripts/
 fix_*.ps1
 fix_*.py
 UPDATE_SUMMARY.md
 stdin_commands.txt
+
+# IDE settings
+*.DotSettings
 
 # OS files
 .DS_Store
