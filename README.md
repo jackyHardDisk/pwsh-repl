@@ -26,7 +26,7 @@ Code with auto-loading AgentBlocks module.
 **AgentBlocks Module**
 
 - 5 PowerShell functions for pattern learning and meta-discovery
-- 43 pre-configured patterns for common tools (JavaScript, Python, .NET, Build)
+- 49 pre-configured patterns for common tools (JavaScript, Python, .NET, Build)
 - Auto-loads on session creation
 - Token-efficient (0 tokens upfront, discovered via Get-Help)
 
@@ -291,7 +291,7 @@ mcp__pwsh-repl__pwsh(script='Get-StreamData test Error | Select-RegexMatch -Patt
 - Core MCP server with stdio protocol
 - 3 tools: pwsh (with mode callback), stdin, list_sessions
 - SessionManager with named sessions and stdin pipe architecture
-- Base module (39 functions), AgentBlocks (5 functions + 43 patterns)
+- Base module (39 functions), AgentBlocks (5 functions + 49 patterns)
 - SessionLog module (external via PWSH_MCP_MODULES)
 - Auto-loading modules on session creation
 - Build-time Quick Reference generation in tool description
@@ -328,6 +328,53 @@ See [docs/DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md) for detailed rationale.
 
 ## Example Workflows
 
+### Reproducible Examples (No External Dependencies)
+
+These examples work immediately without project setup:
+
+```powershell
+# Group-Similar: Cluster similar error messages (Jaro-Winkler similarity)
+$errors = @(
+    "Connection timeout to server api.example.com:443"
+    "Connection timeout to server api.example.com:8080"
+    "Connection timeout to server db.example.com:5432"
+    "File not found: config.json"
+    "File not found: settings.json"
+    "Permission denied: /var/log/app.log"
+    "Permission denied: /var/log/error.log"
+)
+$errors | Group-Similar -Threshold 0.7 | Format-Count
+# Output:
+#   3x: Connection timeout to server api.example.com:443
+#   2x: File not found: config.json
+#   2x: Permission denied: /var/log/app.log
+
+# Select-RegexMatch: Parse git status with named groups
+$gitOutput = @(" M src/app.js", "?? temp.log", "A  new.ts", " D old.txt")
+$gitOutput | Select-RegexMatch -Pattern (Get-Patterns -Name Git-Status).Pattern
+# Output: @{index= ; worktree=M; file=src/app.js} ...
+
+# Group-By + Format-Count: Aggregate by field
+$gitOutput | Select-RegexMatch -Pattern (Get-Patterns -Name Git-Status).Pattern |
+    Group-By worktree | Format-Count
+# Output:
+#   1x: M
+#   1x: ?
+#   1x: D
+
+# Pattern matching: Parse MSBuild errors
+$buildLog = @(
+    "src\App.cs(42,15): error CS0103: The name 'foo' does not exist"
+    "src\Data.cs(17,8): error CS1061: 'string' has no definition for 'Bar'"
+    "lib\Help.cs(5,1): warning CS0168: Variable 'x' declared but never used"
+)
+$buildLog | Select-RegexMatch -Pattern (Get-Patterns -Name MSBuild-Error).Pattern |
+    Group-By code | Format-Count
+# Output:
+#   1x: CS0103
+#   1x: CS1061
+```
+
 ### Workflow 1: Build Error Analysis
 
 ```powershell
@@ -335,21 +382,18 @@ See [docs/DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md) for detailed rationale.
 mcp__pwsh-repl__pwsh(
     mode='Invoke-DevRun',
     script='dotnet build',
-    name='build',
-    kwargs={'Streams': ['Error', 'Warning']}
+    name='build'
 )
 
-# Summary shows top errors:
-#   8x: CS0103: The name 'foo' does not exist
+# Analyze with Group-BuildErrors (regex + fuzzy hybrid)
+mcp__pwsh-repl__pwsh(script='Get-StreamData build Output | Group-BuildErrors | Format-Count')
 
-# Deep dive with AgentBlocks
+# Deep dive with pattern matching
 mcp__pwsh-repl__pwsh(script='''
-Get-StreamData build Error |
-    Select-RegexMatch -Pattern (Get-Patterns -Name "MSBuild").Pattern |
+Get-StreamData build Output |
+    Select-RegexMatch -Pattern (Get-Patterns -Name MSBuild-Error).Pattern |
     Where-Object { $_.Code -eq "CS0103" }
 ''')
-
-# Shows all CS0103 occurrences with file/line info
 ```
 
 ### Workflow 2: Test Suite Analysis
@@ -357,7 +401,6 @@ Get-StreamData build Error |
 ```powershell
 # Discover test command
 mcp__pwsh-repl__pwsh(script='Find-ProjectTools')
-# Output: JavaScript | npm | npm run test | test
 
 # Run tests with Invoke-DevRun
 mcp__pwsh-repl__pwsh(
@@ -366,24 +409,26 @@ mcp__pwsh-repl__pwsh(
     name='test'
 )
 
-# Extract failures
-mcp__pwsh-repl__pwsh(script='Get-StreamData test Error | Select-RegexMatch -Pattern (Get-Patterns -Name "Jest").Pattern | Format-Count')
+# Extract failures with pattern
+mcp__pwsh-repl__pwsh(script='''
+Get-StreamData test Output |
+    Select-RegexMatch -Pattern (Get-Patterns -Name Jest-Error).Pattern |
+    Format-Count
+''')
 ```
 
 ### Workflow 3: Learn Custom Tool
 
 ```powershell
-# Learn new tool interactively
-pwsh("Learn-OutputPattern -Name 'myapp-lint' -Command 'myapp lint src/' -Interactive")
+# Register custom pattern
+Set-Pattern -Name "myapp-error" `
+    -Pattern '(?<level>ERROR|WARN):\s*\[(?<component>\w+)\]\s*(?<message>.+)' `
+    -Description "MyApp log format" `
+    -Category "error"
 
-# Agent sees detected patterns, chooses one
-# Pattern registered and ready
-
-# Use learned pattern
-pwsh('$env:lint_output | Extract-Regex -Pattern (Get-Patterns -Name "myapp-lint").Pattern')
-
-# Save for future sessions
-pwsh("Save-Project -Path '.brickyard.json'")
+# Use it immediately
+$logs | Select-RegexMatch -Pattern (Get-Patterns -Name myapp-error).Pattern |
+    Group-By component | Format-Count
 ```
 
 ### Workflow 4: Interactive SSH Session
