@@ -18,7 +18,13 @@ public class StdioTool
     }
 
     [McpServerTool]
-    [Description("Interact with background process stdio (write stdin, read stdout/stderr, close stdin, stop process)")]
+    [Description(@"Interact with background process stdio (write stdin, read stdout/stderr, close stdin, stop process)
+
+**Usage pattern:**
+  pwsh(script='python server.py', runInBackground=true, name='srv')
+  stdio(name='srv')  # read output
+  stdio(name='srv', data='command\n')  # send input
+  stdio(name='srv', stop=true)  # stop and cache for Get-BackgroundData")]
     public string Stdio(
         [Description("Background process name (required)")]
         string name,

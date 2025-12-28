@@ -22,7 +22,13 @@ public class ListSessionsTool
     }
 
     [McpServerTool]
-    [Description("List active PowerShell session IDs")]
+    [Description(@"List active PowerShell session IDs
+
+**Examples:**
+  list_sessions()  # show session IDs
+  list_sessions(getSessionHealth=true)  # include runspace state, error counts
+  list_sessions(killUnhealthy=true)  # remove broken sessions
+  list_sessions(killAllSessions=true)  # reset all sessions")]
     public string ListSessions(
         [Description("Include health diagnostics for each session (runspace state, error count, etc.)")]
         bool getSessionHealth = false,
