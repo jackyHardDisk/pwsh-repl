@@ -31,12 +31,17 @@ public static class ToolDescriptions
   Test-Pattern -Name [-Sample] [-ShowMatches]
   (+38 more: Get-Command -Module AgentBlocks)
 
-**TokenCounter** - Claude token counting (tiktoken)
-  Measure-Tokens [-Text] [-Model] [-CondaEnvironment]
-
 **SessionLog** - Session tracking (JSONL, 4AM boundary)
   Add-Todo -Text | Update-TodoStatus -Index -Status
   Show-Session [-Last] | Read-SessionLog [-Last]
+  (External module via PWSH_MCP_MODULES)
+
+**LoraxMod** - Tree-sitter AST parsing v1.0.1 (28 languages, experimental)
+  ConvertTo-LoraxAST -Code $code -Language python [-Recurse]
+  Compare-LoraxAST -OldCode $old -NewCode $new -Language csharp  # semantic diff
+  # Dead code: compare defined functions vs call sites
+  $defined = Find-LoraxFunction -Language python -FilePath $file
+  $calls = Find-LoraxNode ... -NodeTypes @('call')  # use Extractions['callable']
   (External module via PWSH_MCP_MODULES)
 
 Use Get-Help <function> -Full for detailed documentation.

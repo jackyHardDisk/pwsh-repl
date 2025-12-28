@@ -17,8 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Extract: `Select-RegexMatch`, `Select-TextBetween`, `Select-Column`
   - Analyze: `Find-Errors`, `Find-Warnings`, `Get-BuildError`
   - 43 pre-configured patterns (ESLint, Pytest, MSBuild, GCC, etc.)
-- **TokenCounter Module**: Claude token counting via tiktoken
-- **LoraxMod Integration**: Tree-sitter AST parsing for 28 languages (optional)
+- **LoraxMod Module**: Tree-sitter AST parsing for 28 languages (bundled)
 - **Mode Callback Pattern**: Call AgentBlocks functions via `mode` parameter
 - **Session Isolation**: Named sessions with independent variable scopes
 - **Background Execution**: Run long processes with `runInBackground=true`

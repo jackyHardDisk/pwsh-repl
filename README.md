@@ -36,11 +36,6 @@ Code with auto-loading AgentBlocks module.
 - Todo management (Add-Todo, Update-TodoStatus)
 - Session history (Show-Session, Read-SessionLog)
 
-**TokenCounter Module**
-
-- Accurate Claude token counting using tiktoken
-- Measure-Tokens function for text/file analysis
-
 **LoraxMod Module (Bundled)**
 
 - Tree-sitter AST parsing for 28 languages
@@ -109,7 +104,7 @@ Notes:
 - Use absolute paths (required for MCP server context)
 - Multiple modules: semicolon-delimited
 - Modules auto-load on session creation
-- Built-in modules (AgentBlocks, TokenCounter) always load automatically
+- Built-in modules (AgentBlocks, LoraxMod) always load automatically
 
 ### Test
 
@@ -287,7 +282,7 @@ mcp__pwsh-repl__pwsh(script='Get-StreamData test Error | Select-RegexMatch -Patt
 - 3 tools: pwsh (with mode callback), stdin, list_sessions
 - SessionManager with named sessions and stdin pipe architecture
 - Base module (39 functions), AgentBlocks (5 functions + 43 patterns)
-- SessionLog, TokenCounter modules
+- SessionLog module (external via PWSH_MCP_MODULES)
 - Auto-loading modules on session creation
 - Build-time Quick Reference generation in tool description
 - Environment activation (conda/venv) support
@@ -520,7 +515,7 @@ dotnet build
 Build output: `release/v0.1.0/`
 - PowerShellMcpServer.exe
 - PowerShell SDK runtime libraries (auto-copied)
-- All modules (AgentBlocks, TokenCounter) auto-copied to Modules/
+- All modules (AgentBlocks, LoraxMod) auto-copied to Modules/
 
 ## Contributing
 

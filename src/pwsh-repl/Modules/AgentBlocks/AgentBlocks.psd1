@@ -3,9 +3,9 @@
     ModuleVersion = '1.0.0'
     CompatiblePSEditions = @('Core', 'Desktop')
     GUID = 'b4563f21-98d7-4a2c-9f1e-8c7b3d5e6a9f'
-    Author = 'pwsh-repl'
-    CompanyName = 'pwsh-repl'
-    Copyright = '(c) 2025 pwsh-repl. All rights reserved.'
+    Author = 'jackyHardDisk'
+    CompanyName = 'jackyHardDisk'
+    Copyright = '(c) 2025 jackyHardDisk. Licensed under MIT.'
     Description = 'AgentBlocks - PowerShell toolkit for AI agent development. Provides execution workflows, output analysis, pattern learning, and state management for MCP server integration.'
     PowerShellVersion = '7.0'
     FunctionsToExport = @(
@@ -67,6 +67,8 @@
     PrivateData = @{
         PSData = @{
             Tags = @('Development', 'MCP', 'Cache', 'DevOps', 'Agent', 'AI')
+            LicenseUri = 'https://github.com/jackyHardDisk/pwsh-repl/blob/master/LICENSE'
+            ProjectUri = 'https://github.com/jackyHardDisk/pwsh-repl'
             ReleaseNotes = @'
 0.2.0 - Base Module Foundation (2025-11-23)
 Complete migration of core functions from AgentBlocks (40 functions).

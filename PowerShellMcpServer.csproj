@@ -53,15 +53,6 @@
               SkipUnchangedFiles="true"/>
     </Target>
 
-    <Target Name="CopyTokenCounterModule" AfterTargets="Build">
-        <ItemGroup>
-            <TokenCounterFiles Include="src\pwsh-repl\Modules\TokenCounter\**\*.*"/>
-        </ItemGroup>
-        <Copy SourceFiles="@(TokenCounterFiles)"
-              DestinationFolder="$(OutDir)Modules\TokenCounter\%(RecursiveDir)"
-              SkipUnchangedFiles="true"/>
-    </Target>
-
     <Target Name="CopyLoraxModModule" AfterTargets="Build">
         <ItemGroup>
             <LoraxModFiles Include="src\pwsh-repl\Modules\LoraxMod\**\*.*"/>

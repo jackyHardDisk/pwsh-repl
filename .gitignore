@@ -55,10 +55,18 @@ stdin_commands.txt
 .DS_Store
 Thumbs.db
 
-#deprecated 
+# Deprecated/removed
 archive/
 *deprecated*
+src/pwsh-repl/Modules/TokenCounter/
 # Test output with environment variables
 test/output/
 src/pwsh-repl/Modules/LoraxMod/loraxmod/node_modules/
 src/pwsh-repl/Modules/LoraxMod/loraxmod/.git/
+
+# Internal documentation (not for public distribution)
+docs/ARCHITECTURE.md
+docs/CACHE_CONSISTENCY.md
+docs/DESIGN_DECISIONS.md
+src/pwsh-repl/IMPLEMENTATION_OUTLINE.md
+src/pwsh-repl/Modules/MODULE_DEVELOPMENT_GUIDE.md
