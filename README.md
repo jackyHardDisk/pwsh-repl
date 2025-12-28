@@ -53,9 +53,11 @@ Code with auto-loading AgentBlocks module.
 
 ## Installation
 
-### Option 1: Download Release
+### Option 1: Download Release (Recommended)
 
 Download the latest `pwsh-repl-vX.X.X-win-x64.zip` from [GitHub Releases](https://github.com/jackyHardDisk/pwsh-repl/releases).
+
+Includes all modules: AgentBlocks, LoraxMod (with tree-sitter binaries).
 
 ### Option 2: Build from Source
 
@@ -66,6 +68,8 @@ dotnet build
 ```
 
 Output: `release/v0.1.0/PowerShellMcpServer.exe`
+
+**Note:** Building from source does not include LoraxMod. To add it, clone [loraxMod](https://github.com/jackyHardDisk/loraxMod) and configure via `PWSH_MCP_MODULES`.
 
 ## Configuration
 
