@@ -39,11 +39,8 @@
         <PackageReference Include="LoraxMod" Version="1.0.1"/>
     </ItemGroup>
 
-    <Target Name="GenerateToolDescriptions" BeforeTargets="BeforeCompile">
-        <Exec Command="pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\Generate-ToolDescriptions.ps1"
-              WorkingDirectory="$(MSBuildProjectDirectory)"
-              IgnoreExitCode="false"/>
-    </Target>
+    <!-- GenerateToolDescriptions: Run locally via scripts/Generate-ToolDescriptions.ps1 -->
+    <!-- ToolDescriptions.generated.cs is committed to repo -->
 
     <Target Name="CopyPowerShellModules" AfterTargets="Build">
         <ItemGroup>
@@ -63,13 +60,6 @@
               SkipUnchangedFiles="true"/>
     </Target>
 
-    <Target Name="CopyLoraxModModule" AfterTargets="Build">
-        <ItemGroup>
-            <LoraxModFiles Include="src\pwsh-repl\Modules\LoraxMod\**\*.*"/>
-        </ItemGroup>
-        <Copy SourceFiles="@(LoraxModFiles)"
-              DestinationFolder="$(OutDir)Modules\LoraxMod\%(RecursiveDir)"
-              SkipUnchangedFiles="true"/>
-    </Target>
+    <!-- LoraxMod: Loaded from NuGet package, not local folder -->
 
 </Project>
