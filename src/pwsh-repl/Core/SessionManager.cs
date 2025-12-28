@@ -1,3 +1,5 @@
+// Copyright (c) 2025 jackyHardDisk. Licensed under the MIT License.
+
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Diagnostics;

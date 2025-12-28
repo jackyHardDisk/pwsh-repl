@@ -11,12 +11,22 @@
         <OutputPath>release\v$(Version)\</OutputPath>
         <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
         <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+
+        <!-- Package metadata for GitHub/NuGet -->
+        <Authors>jackyHardDisk</Authors>
+        <Description>MCP server providing persistent PowerShell sessions with AgentBlocks module for Claude Code</Description>
+        <PackageTags>mcp;powershell;claude;ai;automation;agentic</PackageTags>
+        <RepositoryUrl>https://github.com/jackyHardDisk/pwsh-repl</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
     </PropertyGroup>
+
     <ItemGroup>
         <PackageReference Include="ModelContextProtocol" Version="0.4.0-preview.3"/>
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0"/>
         <PackageReference Include="Microsoft.PowerShell.SDK" Version="7.4.0"/>
         <PackageReference Include="System.Threading.Channels" Version="8.0.0"/>
+        <PackageReference Include="LoraxMod" Version="1.0.1"/>
     </ItemGroup>
 
     <Target Name="GenerateToolDescriptions" BeforeTargets="BeforeCompile">
@@ -43,11 +53,22 @@
               SkipUnchangedFiles="true"/>
     </Target>
 
-        <Target Name="CopyTokenCounterModule" AfterTargets="Build">
+    <Target Name="CopyTokenCounterModule" AfterTargets="Build">
         <ItemGroup>
             <TokenCounterFiles Include="src\pwsh-repl\Modules\TokenCounter\**\*.*"/>
         </ItemGroup>
         <Copy SourceFiles="@(TokenCounterFiles)"
               DestinationFolder="$(OutDir)Modules\TokenCounter\%(RecursiveDir)"
               SkipUnchangedFiles="true"/>
-    </Target></Project>
+    </Target>
+
+    <Target Name="CopyLoraxModModule" AfterTargets="Build">
+        <ItemGroup>
+            <LoraxModFiles Include="src\pwsh-repl\Modules\LoraxMod\**\*.*"/>
+        </ItemGroup>
+        <Copy SourceFiles="@(LoraxModFiles)"
+              DestinationFolder="$(OutDir)Modules\LoraxMod\%(RecursiveDir)"
+              SkipUnchangedFiles="true"/>
+    </Target>
+
+</Project>
