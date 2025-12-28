@@ -1,3 +1,5 @@
+// Copyright (c) 2025 jackyHardDisk. Licensed under the MIT License.
+
 using System;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;

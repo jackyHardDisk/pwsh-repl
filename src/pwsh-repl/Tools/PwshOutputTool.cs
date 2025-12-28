@@ -1,3 +1,5 @@
+// Copyright (c) 2025 jackyHardDisk. Licensed under the MIT License.
+
 using System.ComponentModel;
 using System.Text;
 using System.Text.RegularExpressions;

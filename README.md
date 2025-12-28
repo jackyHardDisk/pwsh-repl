@@ -1,5 +1,9 @@
 # PowerShell Persistent MCP Server
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows-lightgrey.svg)](https://www.microsoft.com/windows)
+
 Model Context Protocol (MCP) server providing persistent PowerShell execution for Claude
 Code with auto-loading AgentBlocks module.
 
@@ -37,12 +41,12 @@ Code with auto-loading AgentBlocks module.
 - Accurate Claude token counting using tiktoken
 - Measure-Tokens function for text/file analysis
 
-**LoraxMod Module (Optional)**
+**LoraxMod Module (Bundled)**
 
-- External tree-sitter AST parsing module (28 languages)
-- 10 cmdlets for code analysis and semantic diff
-- Load via PWSH_MCP_MODULES environment variable
-- Native C# implementation (TreeSitter.DotNet)
+- Tree-sitter AST parsing for 28 languages
+- 10 cmdlets: `ConvertTo-LoraxAST`, `Compare-LoraxAST`, `Find-LoraxFunction`, etc.
+- Semantic diff, function extraction, dependency analysis
+- Native C# via [TreeSitter.DotNet](https://www.nuget.org/packages/TreeSitter.DotNet)
 
 **Token Efficiency**
 
@@ -527,9 +531,17 @@ This is a custom MCP server for personal/organizational use. Contributions welco
 - Bug fixes
 - Documentation improvements
 
+## Security Considerations
+
+This is a local PowerShell execution environment for agentic coding. By design, it executes commands you or your AI assistant provide.
+
+- **Audit logging** (opt-in via `PWSH_MCP_AUDIT_LOG`): Logs contain full script content. Avoid enabling in shared environments if scripts may contain credentials.
+- **Background processes**: Command arguments may appear in stderr logs.
+- **Module loading** (`PWSH_MCP_MODULES`): Only loads modules from paths you explicitly configure.
+
 ## License
 
-MIT License - See LICENSE file for details
+MIT License - See [LICENSE](LICENSE) file for details.
 
 ## References
 
