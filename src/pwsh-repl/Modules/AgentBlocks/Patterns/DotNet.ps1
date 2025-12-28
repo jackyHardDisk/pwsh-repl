@@ -1,16 +1,16 @@
 # .NET Tool Patterns
 # Pre-configured patterns for .NET development tools
 
-# MSBuild / C# Compiler Errors
+# MSBuild / .NET Build Errors (CS, MSB, NU, NETSDK, FS, BC codes)
 Set-Pattern -Name "MSBuild-Error" `
-    -Pattern '(?<file>[\w/\\.-]+)\((?<line>\d+),(?<col>\d+)\):\s*error\s*(?<code>CS\d+):\s*(?<message>.+)' `
-    -Description "MSBuild C# errors: file(line,col): error CS####: message" `
+    -Pattern '(?<file>[^(]+)\((?<line>\d+),(?<col>\d+)\):\s*error\s*(?<code>[A-Z]+\d+):\s*(?<message>.+)' `
+    -Description "MSBuild errors: file(line,col): error CODE: message" `
     -Category "error"
 
-# MSBuild / C# Compiler Warnings
+# MSBuild / .NET Build Warnings (CS, MSB, NU, NETSDK, FS, BC codes)
 Set-Pattern -Name "MSBuild-Warning" `
-    -Pattern '(?<file>[\w/\\.-]+)\((?<line>\d+),(?<col>\d+)\):\s*warning\s*(?<code>CS\d+):\s*(?<message>.+)' `
-    -Description "MSBuild C# warnings: file(line,col): warning CS####: message" `
+    -Pattern '(?<file>[^(]+)\((?<line>\d+),(?<col>\d+)\):\s*warning\s*(?<code>[A-Z]+\d+):\s*(?<message>.+)' `
+    -Description "MSBuild warnings: file(line,col): warning CODE: message" `
     -Category "warning"
 
 # NuGet Package Restore Errors
