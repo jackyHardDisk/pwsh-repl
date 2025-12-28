@@ -180,7 +180,7 @@ public class SessionManager : IDisposable
                 Path.Combine(AppContext.BaseDirectory, "Modules", "AgentBlocks"));
 
             // Load additional modules from PWSH_MCP_MODULES environment variable
-            // (includes LoraxMod, SessionLog, TokenCounter, etc.)
+            // (e.g., SessionLog or other external modules)
             LoadAdditionalModules(pwsh);
 
             // Initialize ConcurrentDictionary for DevRun cache (in C# for thread-safety)
