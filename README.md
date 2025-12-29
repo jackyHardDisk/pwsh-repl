@@ -31,13 +31,7 @@ Code with auto-loading AgentBlocks module.
 - Auto-loads on session creation
 - Token-efficient (0 tokens upfront, discovered via Get-Help)
 
-**SessionLog Module**
-
-- Session tracking with JSONL format and 4AM day boundary
-- Todo management (Add-Todo, Update-TodoStatus)
-- Session history (Show-Session, Read-SessionLog)
-
-**LoraxMod Module (Bundled)**
+**LoraxMod Module (Bundled in Releases)**
 
 - Tree-sitter AST parsing for 28 languages
 - 10 cmdlets: `ConvertTo-LoraxAST`, `Compare-LoraxAST`, `Find-LoraxFunction`, etc.
@@ -334,7 +328,6 @@ mcp__pwsh-repl__pwsh(script='Get-StreamData test Error | Select-RegexMatch -Patt
 - 4 tools: pwsh, pwsh_output, stdio, list_sessions
 - SessionManager with named sessions and Job Object process management
 - Base module (39 functions), AgentBlocks (5 functions + 49 patterns)
-- SessionLog module (external via PWSH_MCP_MODULES)
 - Auto-loading modules on session creation
 - Build-time Quick Reference generation in tool description
 - Environment activation (conda/venv) support
