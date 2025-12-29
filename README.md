@@ -25,7 +25,7 @@ MCP server providing persistent PowerShell REPL for Claude Code with custom modu
 
 **AgentBlocks Module**
 
-- 5 PowerShell functions for pattern learning and meta-discovery
+- 41 functions for execution, transformation, analysis, and pattern learning
 - 49 pre-configured patterns for common tools (JavaScript, Python, .NET, Build)
 - Auto-loads on session creation
 - Token-efficient (0 tokens upfront, discovered via Get-Help)
@@ -326,7 +326,7 @@ mcp__pwsh-repl__pwsh(script='Get-StreamData test Error | Select-RegexMatch -Patt
 - Core MCP server with stdio protocol
 - 4 tools: pwsh, pwsh_output, stdio, list_sessions
 - SessionManager with named sessions and Job Object process management
-- Base module (39 functions), AgentBlocks (5 functions + 49 patterns)
+- AgentBlocks module (41 functions + 49 patterns)
 - Auto-loading modules on session creation
 - Build-time Quick Reference generation in tool description
 - Environment activation (conda/venv) support
