@@ -4,8 +4,7 @@
 [![.NET 8.0](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows-lightgrey.svg)](https://www.microsoft.com/windows)
 
-Model Context Protocol (MCP) server providing persistent PowerShell execution for Claude
-Code with auto-loading AgentBlocks module.
+MCP server providing persistent PowerShell REPL for Claude Code with custom module loading and conda/venv environment activation.
 
 **Status:** Production Ready
 
