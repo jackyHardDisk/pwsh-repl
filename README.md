@@ -108,7 +108,22 @@ Notes:
 - Use absolute paths (required for MCP server context)
 - Multiple modules: semicolon-delimited
 - Modules auto-load on session creation
-- Built-in modules (AgentBlocks, LoraxMod) load automatically
+
+**Environment Inheritance:**
+
+PowerShell sessions inherit PATH from the environment where Claude Code started:
+
+```powershell
+# If Claude Code started from conda base, you get conda python:
+pwsh("python --version")  # Python 3.12.3 (conda base)
+pwsh("Get-Command python | Select Source")  # C:\Users\...\anaconda3\python.exe
+
+# To use a different environment for a specific call:
+pwsh("python --version", environment="myproject")  # Uses conda env 'myproject'
+pwsh("python --version", environment="C:\\project\\venv")  # Uses venv
+```
+
+No MCP-level environment config exists - activation is per-call via the `environment` parameter.
 
 ### Test
 
@@ -134,7 +149,9 @@ Get-Command -Module AgentBlocks | Measure-Object
 - `sessionId` (optional, default: "default") - Session ID for state isolation
 - `runInBackground` (optional, default: false) - Run in background, use stdio to interact
 - `timeoutSeconds` (optional, default: 60) - Execution timeout
-- `environment` (optional) - venv path or conda environment name
+- `environment` (optional) - Activate a different Python environment for this call:
+  - venv: Full path to venv directory (e.g., `C:\project\venv`)
+  - conda: Environment name (e.g., `myenv`) - resolved via `conda info --envs`
 
 **Features:**
 
