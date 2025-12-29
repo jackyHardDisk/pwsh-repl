@@ -6,7 +6,7 @@ public static class ToolDescriptions
 {
     public const string PwshToolDescription = @"Execute PowerShell with persistent sessions. Variables and state persist across calls within the same sessionId.
 
-**Modules auto-loaded:** Base, AgentBlocks + PWSH_MCP_MODULES (e.g., LoraxMod, SessionLog)
+**Modules auto-loaded:** Base, AgentBlocks + PWSH_MCP_MODULES (e.g., LoraxMod)
 **Check loaded modules:** Use pwsh_mcp://modules resource
 
 **Mode callback pattern:** Use mode parameter to call module functions directly:
@@ -33,11 +33,6 @@ public static class ToolDescriptions
   Set-Pattern -Name -Pattern -Description [-Category]
   Test-Pattern -Name [-Sample] [-ShowMatches]
   (+38 more: Get-Command -Module AgentBlocks)
-
-**SessionLog** - Session tracking (JSONL, 4AM boundary)
-  Add-Todo -Text | Update-TodoStatus -Index -Status
-  Show-Session [-Last] | Read-SessionLog [-Last]
-  (External module via PWSH_MCP_MODULES)
 
 Use Get-Help <function> -Full for detailed documentation.
 ";
