@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Background Execution**: Run long processes with `runInBackground=true`
 - **Windows Job Objects**: Atomic process tree cleanup on timeout
 - **EOF Pipe Stdin**: Proper subprocess compatibility
-- **MCP Resources**: Dynamic module discovery via `pwsh_mcp_modules://`
+- **MCP Resources**: Dynamic module discovery via `pwsh_mcp://`
 - **Audit Logging**: Optional script logging via `PWSH_MCP_AUDIT_LOG`
 
 ### Infrastructure

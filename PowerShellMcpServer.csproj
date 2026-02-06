@@ -25,11 +25,12 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="ModelContextProtocol" Version="0.4.0-preview.3"/>
-        <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0"/>
-        <PackageReference Include="Microsoft.PowerShell.SDK" Version="7.4.0"/>
-        <PackageReference Include="System.Threading.Channels" Version="8.0.0"/>
-        <PackageReference Include="LoraxMod" Version="1.0.1"/>
+        <PackageReference Include="ModelContextProtocol" Version="0.4.0-preview.3" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+        <PackageReference Include="Microsoft.PowerShell.SDK" Version="7.4.0" />
+        <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
+        <!-- LoraxMod loaded via PWSH_MCP_MODULES, not NuGet -->
+        <!-- <PackageReference Include="LoraxMod" Version="1.0.6" /> -->
     </ItemGroup>
 
     <!-- GenerateToolDescriptions: Run locally via scripts/Generate-ToolDescriptions.ps1 -->
@@ -37,20 +38,16 @@
 
     <Target Name="CopyPowerShellModules" AfterTargets="Build">
         <ItemGroup>
-            <PowerShellModules Include="$(OutDir)runtimes\win\lib\net8.0\**\*.*"/>
+            <PowerShellModules Include="$(OutDir)runtimes\win\lib\net8.0\**\*.*" />
         </ItemGroup>
-        <Copy SourceFiles="@(PowerShellModules)"
-              DestinationFolder="$(OutDir)%(RecursiveDir)"
-              SkipUnchangedFiles="true"/>
+        <Copy SourceFiles="@(PowerShellModules)" DestinationFolder="$(OutDir)%(RecursiveDir)" SkipUnchangedFiles="true" />
     </Target>
 
     <Target Name="CopyAgentBlocksModule" AfterTargets="Build">
         <ItemGroup>
-            <AgentBlocksFiles Include="src\pwsh-repl\Modules\AgentBlocks\**\*.*"/>
+            <AgentBlocksFiles Include="src\pwsh-repl\Modules\AgentBlocks\**\*.*" />
         </ItemGroup>
-        <Copy SourceFiles="@(AgentBlocksFiles)"
-              DestinationFolder="$(OutDir)Modules\AgentBlocks\%(RecursiveDir)"
-              SkipUnchangedFiles="true"/>
+        <Copy SourceFiles="@(AgentBlocksFiles)" DestinationFolder="$(OutDir)Modules\AgentBlocks\%(RecursiveDir)" SkipUnchangedFiles="true" />
     </Target>
 
     <!-- LoraxMod: Loaded from NuGet package, not local folder -->

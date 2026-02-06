@@ -86,6 +86,9 @@ public class SessionManager : IDisposable
         foreach (var kvp in _sessions)
             try
             {
+                // Stop pipeline, terminate Job, then dispose - non-blocking
+                kvp.Value.PowerShell?.Stop();
+                kvp.Value.TerminateJobProcesses();
                 kvp.Value.Dispose();
             }
             catch
@@ -463,14 +466,32 @@ if (-not $global:DevRunCacheCounter) {
 
     /// <summary>
     ///     Remove a session entirely.
+    ///     Stops any running pipeline, terminates Job Object (kills all child processes),
+    ///     then disposes the session. Non-blocking.
     /// </summary>
     public void RemoveSession(string sessionId)
     {
         if (_sessions.TryRemove(sessionId, out var session))
         {
-            session.Runspace?.Close();
-            session.Runspace?.Dispose();
-            session.PowerShell?.Dispose();
+            // Stop any running pipeline first (non-blocking)
+            try
+            {
+                if (session.PowerShell?.InvocationStateInfo.State == System.Management.Automation.PSInvocationState.Running ||
+                    session.PowerShell?.InvocationStateInfo.State == System.Management.Automation.PSInvocationState.Stopping)
+                {
+                    session.PowerShell?.Stop();
+                }
+            }
+            catch
+            {
+                // Ignore errors stopping - we're disposing anyway
+            }
+
+            // Terminate Job Object to kill all child processes atomically
+            session.TerminateJobProcesses();
+
+            // Dispose session (handles remaining cleanup)
+            session.Dispose();
         }
     }
 

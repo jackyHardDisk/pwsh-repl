@@ -120,6 +120,20 @@ public class PwshTool
                 return $"Background process '{name}' started (PID {processInfo.Process?.Id}, {statusText})\n\n{(initialOutput.Length > 0 ? initialOutput.ToString() : "(No output yet)")}";
             }
 
+            // Auto-generate cache name if not provided (must happen BEFORE mode script building)
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                // Increment counter and generate name
+                session.PowerShell.AddScript(
+                    "if (-not $global:DevRunCacheCounter) { $global:DevRunCacheCounter = 0 }; $global:DevRunCacheCounter++; $global:DevRunCacheCounter");
+                var counterResult = session.PowerShell.Invoke();
+                session.PowerShell.Commands.Clear();
+                session.PowerShell.Streams.ClearStreams();
+
+                var counter = counterResult.FirstOrDefault()?.ToString() ?? "1";
+                name = $"pwsh_{counter}";
+            }
+
             // Build PowerShell script based on mode
             string executionScript;
             if (!string.IsNullOrWhiteSpace(mode))
@@ -131,6 +145,11 @@ public class PwshTool
                 // Add -Script parameter if script provided
                 if (!string.IsNullOrWhiteSpace(script))
                     sb.Append($" -Script {{{script}}}");
+
+                // Add -Name parameter for functions that require it
+                // Invoke-DevRun and Get-DevRunOutput have mandatory -Name parameter
+                if (mode.Contains("DevRun", StringComparison.OrdinalIgnoreCase))
+                    sb.Append($" -Name '{name.Replace("'", "''")}'");
 
                 // Add kwargs as hashtable parameters
                 if (kwargs != null && kwargs.Count > 0)
@@ -146,20 +165,6 @@ public class PwshTool
             {
                 // Direct script execution
                 executionScript = script!;
-            }
-
-            // Auto-generate cache name if not provided
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                // Increment counter and generate name
-                session.PowerShell.AddScript(
-                    "if (-not $global:DevRunCacheCounter) { $global:DevRunCacheCounter = 0 }; $global:DevRunCacheCounter++; $global:DevRunCacheCounter");
-                var counterResult = session.PowerShell.Invoke();
-                session.PowerShell.Commands.Clear();
-                session.PowerShell.Streams.ClearStreams();
-
-                var counter = counterResult.FirstOrDefault()?.ToString() ?? "1";
-                name = $"pwsh_{counter}";
             }
 
             // Execute with timeout using async pattern
@@ -221,17 +226,19 @@ if (-not $global:DevRunCache.ContainsKey('{name}')) {{
             session.PowerShell.Streams.ClearStreams();
 
             // Handle autodispose based on parameter value and session type
-            HandleAutodispose(sessionId, autodispose);
+            // Skip immediate dispose for background processes - they need the session alive
+            HandleAutodispose(sessionId, autodispose, runInBackground);
         }
     }
 
     /// <summary>
     ///     Handle session autodispose logic.
-    ///     - true or "default" session: dispose immediately
+    ///     - true or "default" session: dispose immediately (unless background process)
     ///     - int/number: set TTL in seconds
     ///     - null + named session: set 600s TTL (10 minutes)
+    ///     - background process + no autodispose: force 600s TTL instead of immediate dispose
     /// </summary>
-    private void HandleAutodispose(string sessionId, object? autodispose)
+    private void HandleAutodispose(string sessionId, object? autodispose, bool hasBackgroundProcess = false)
     {
         // Extract value from JsonElement if needed
         bool? disposeNow = null;
@@ -260,9 +267,17 @@ if (-not $global:DevRunCache.ContainsKey('{name}')) {{
         }
 
         // Determine action
-        if (disposeNow == true || (autodispose == null && sessionId == "default"))
+        var wouldDisposeImmediately = disposeNow == true || (autodispose == null && sessionId == "default");
+
+        if (wouldDisposeImmediately && hasBackgroundProcess)
         {
-            // Immediate disposal for explicit true or default session
+            // Background process needs session alive - force TTL instead of immediate dispose
+            var seconds = ttlSeconds ?? 600;
+            _sessionManager.SetSessionTTL(sessionId, seconds);
+        }
+        else if (wouldDisposeImmediately)
+        {
+            // Immediate disposal for explicit true or default session (no background process)
             _sessionManager.RemoveSession(sessionId);
         }
         else if (disposeNow == false)

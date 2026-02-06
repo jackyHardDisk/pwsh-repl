@@ -44,9 +44,10 @@ public class PowerShellPool : IDisposable
         foreach (var session in _instances)
             try
             {
-                session.Runspace?.Close();
-                session.Runspace?.Dispose();
-                session.PowerShell?.Dispose();
+                // Stop pipeline, terminate Job, then dispose - non-blocking
+                session.PowerShell?.Stop();
+                session.TerminateJobProcesses();
+                session.Dispose();
             }
             catch
             {
@@ -171,10 +172,10 @@ public class PowerShellSession : IDisposable
         // Clear background process tracking (processes already killed by Job closure)
         BackgroundProcesses.Clear();
 
-        // Dispose Runspace and PowerShell
+        // Dispose Runspace - skip Close() which blocks on stuck pipelines
+        // Caller should have called PowerShell.Stop() and TerminateJobProcesses() first
         try
         {
-            Runspace?.Close();
             Runspace?.Dispose();
         }
         catch
