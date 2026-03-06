@@ -23,6 +23,12 @@
     Cache initialization handled by SessionManager.cs (ConcurrentDictionary).
 #>
 
+# Initialize cache if not already set by C# SessionManager
+if (-not $global:DevRunCache) {
+    $global:DevRunCache = [System.Collections.Concurrent.ConcurrentDictionary[string, object]]::new()
+    $global:DevRunCacheCounter = 0
+}
+
 # Dot-source all function files
 # Core execution functions
 Get-ChildItem -Path "$PSScriptRoot/Core/*.ps1" -ErrorAction SilentlyContinue | ForEach-Object {
@@ -46,6 +52,11 @@ Get-ChildItem -Path "$PSScriptRoot/Meta/*.ps1" -ErrorAction SilentlyContinue | F
 
 # Pre-configured patterns (automatically register on import)
 Get-ChildItem -Path "$PSScriptRoot/Patterns/*.ps1" -ErrorAction SilentlyContinue | ForEach-Object {
+    . $_.FullName
+}
+
+# Debug helpers (pdb, etc.)
+Get-ChildItem -Path "$PSScriptRoot/Debug/*.ps1" -ErrorAction SilentlyContinue | ForEach-Object {
     . $_.FullName
 }
 

@@ -59,7 +59,16 @@
         'Set-Pattern',
         'Get-Patterns',
         'Test-Pattern',
-        'Register-OutputPattern'
+        'Register-OutputPattern',
+        # Debug (pdb helpers)
+        'Get-PdbArrayCommands',
+        'Get-PdbDictCommands',
+        'Get-PdbLocalsCommands',
+        'Join-PdbCommands',
+        'New-PdbArrayInspect',
+        'ConvertFrom-PdbOutput',
+        'Test-PdbReady',
+        'Get-PdbStepCommands'
     )
     CmdletsToExport = @()
     VariablesToExport = @('DevRunCache')
